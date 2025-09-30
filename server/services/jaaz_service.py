@@ -39,12 +39,13 @@ class JaazService:
             "Content-Type": "application/json"
         }
 
-    async def create_magic_task(self, image_content: str) -> str:
+    async def create_magic_task(self, image_content: str, image_intent: Optional[str] = None) -> str:
         """
         创建云端魔法图像生成任务
 
         Args:
             image_content: 图片内容（base64 或 URL）
+            image_intent: 图片意图分析结果（可选）
 
         Returns:
             str: 任务 ID，失败时返回空字符串
@@ -54,13 +55,21 @@ class JaazService:
                 print("❌ Invalid image content format")
                 return ""
 
+            # 构建请求体，包含图片内容和意图（如果有）
+            request_body = {
+                "image": image_content
+            }
+            
+            # 如果有图片意图分析结果，将其添加到请求体中
+            if image_intent and image_intent.strip():
+                request_body["intent"] = image_intent
+                print(f"📝 添加图片意图到请求: {image_intent[:50]}...")
+
             async with HttpClient.create_aiohttp() as session:
                 async with session.post(
                     f"{self.api_url}/image/magic",
                     headers=self._build_headers(),
-                    json={
-                        "image": image_content
-                    },
+                    json=request_body,
                     timeout=aiohttp.ClientTimeout(total=60.0)
                 ) as response:
                     if response.status == 200:
@@ -199,19 +208,20 @@ class JaazService:
 
             raise Exception(f"Task polling timeout after {max_attempts} attempts")
 
-    async def generate_magic_image(self, image_content: str) -> Optional[Dict[str, Any]]:
+    async def generate_magic_image(self, image_content: str, image_intent: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         生成魔法图像的完整流程
 
         Args:
             image_content: 图片内容（base64 或 URL）
+            image_intent: 图片意图分析结果（可选）
 
         Returns:
             Dict[str, Any]: 包含 result_url 的任务结果，失败时返回包含 error 信息的字典
         """
         try:
-            # 1. 创建任务
-            task_id = await self.create_magic_task(image_content)
+            # 1. 创建任务，传递图片意图分析结果
+            task_id = await self.create_magic_task(image_content, image_intent)
             if not task_id:
                 print("❌ Failed to create magic task")
                 return {"error": "Failed to create magic task"}

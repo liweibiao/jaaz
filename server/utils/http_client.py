@@ -54,6 +54,7 @@ class HttpClient:
             'verify': cls._get_ssl_context(),
             'timeout': 300,
             'follow_redirects': True,
+            'trust_env': True,  # 启用环境变量代理支持
             'limits': httpx.Limits(
                 max_keepalive_connections=0, max_connections=200, keepalive_expiry=30
             ),

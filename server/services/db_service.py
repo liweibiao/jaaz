@@ -100,6 +100,8 @@ class DatabaseService:
                 if row_dict['message']:
                     try:
                         msg = json.loads(row_dict['message'])
+                        # 添加数据库中的id字段到返回的消息中
+                        msg['id'] = row_dict['id']
                         messages.append(msg)
                     except:
                         pass
@@ -198,7 +200,7 @@ class DatabaseService:
             db.row_factory = sqlite3.Row
             cursor = await db.execute(
                 "SELECT api_json FROM comfy_workflows WHERE id = ?", (id,)
-            )
+              )
             row = await cursor.fetchone()
         try:
             workflow_json = (
@@ -209,6 +211,127 @@ class DatabaseService:
             return workflow_json
         except json.JSONDecodeError as exc:
             raise ValueError(f"Stored workflow api_json is not valid JSON: {exc}")
+            
+    async def update_chat_messages(self, session_id: str, messages: List[Dict[str, Any]]):
+        """Update all messages for a chat session by replacing all existing messages"""
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                # 开始事务
+                await db.execute("BEGIN TRANSACTION;")
+                
+                # 1. 先删除该会话的所有现有消息
+                delete_result = await db.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+                # rowcount是普通整数，不需要await
+                deleted_count = delete_result.rowcount
+                print(f"Deleted all {deleted_count} existing messages for session {session_id}")
+                
+                # 2. 插入新的消息列表
+                inserted_count = 0
+                for msg in messages:
+                    try:
+                        # 确保message包含必要的字段
+                        if 'role' in msg and ('content' in msg or 'tool_calls' in msg):
+                            await db.execute(
+                                "INSERT INTO chat_messages (session_id, role, message) VALUES (?, ?, ?)",
+                                (session_id, msg['role'], json.dumps(msg))
+                            )
+                            inserted_count += 1
+                    except Exception as e:
+                        print(f"Failed to insert message: {e}")
+                        continue
+                
+                await db.commit()
+                print(f"Update complete: deleted {deleted_count}, inserted {inserted_count} messages")
+                return {
+                    "success": True,
+                    "deleted_count": deleted_count,
+                    "inserted_count": inserted_count
+                }
+            except Exception as e:
+                await db.rollback()
+                print(f"Failed to update chat messages: {e}")
+                raise
+            
+    async def delete_chat_messages(self, session_id: str, messages_to_delete: List[Dict[str, Any]]):
+        """Delete specific chat messages by id or session_id+created_at"""
+        print(f"Received delete request for session {session_id}")
+        print(f"Messages to delete: {messages_to_delete}")
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            try:
+                # 开始事务
+                await db.execute("BEGIN TRANSACTION;")
+                
+                deleted_count = 0
+                
+                for msg_info in messages_to_delete:
+                    try:
+                        print(f"Processing message: {msg_info}")
+                        # 优先使用id删除
+                        if msg_info.get('id'):
+                            # 先查询消息是否存在
+                            check_result = await db.execute(
+                                "SELECT id, session_id FROM chat_messages WHERE id = ? AND session_id = ?",
+                                (msg_info['id'], session_id)
+                            )
+                            check_row = await check_result.fetchone()
+                            print(f"Check message exists: {check_row}")
+                            
+                            delete_result = await db.execute(
+                                "DELETE FROM chat_messages WHERE id = ? AND session_id = ?",
+                                (msg_info['id'], session_id)
+                            )
+                            # aiosqlite中，rowcount是属性不是可等待的方法
+                            row_count = delete_result.rowcount
+                            deleted_count += row_count
+                            print(f"Delete SQL: DELETE FROM chat_messages WHERE id = {msg_info['id']} AND session_id = {session_id}")
+                            print(f"Deleted message with id {msg_info['id']}, rows affected: {row_count}")
+                        # 如果没有id，使用session_id+created_at删除
+                        elif msg_info.get('created_at'):
+                            # 格式化created_at以匹配数据库中的格式
+                            created_at = msg_info['created_at'].split('.')[0] + 'Z'  # 确保格式一致
+                            delete_result = await db.execute(
+                                "DELETE FROM chat_messages WHERE session_id = ? AND created_at LIKE ?",
+                                (session_id, f"{created_at}%")
+                            )
+                            row_count = await delete_result.rowcount
+                            deleted_count += row_count
+                            print(f"Deleted message with created_at {created_at}, rows affected: {row_count}")
+                        else:
+                            print("No id or created_at provided, skipping")
+                    except Exception as e:
+                        print(f"Failed to delete message: {e}")
+                        continue
+                
+                await db.commit()
+                print(f"Delete complete: deleted {deleted_count} messages")
+                return {
+                    "success": True,
+                    "deleted_count": deleted_count
+                }
+            except Exception as e:
+                await db.rollback()
+                print(f"Failed to delete chat messages: {e}")
+                raise
+    
+    def _create_message_hash(self, message: Dict[str, Any]) -> str:
+        """为消息创建一个简单的哈希值，用于比对消息"""
+        # 使用消息的角色和内容创建哈希
+        role = message.get('role', '')
+        content = message.get('content', '')
+        tool_calls = message.get('tool_calls', [])
+        
+        # 如果content是列表（混合内容），转换为字符串
+        if isinstance(content, list):
+            content = json.dumps(content, sort_keys=True)
+        
+        # 将tool_calls转换为可比较的字符串
+        if isinstance(tool_calls, list):
+            tool_calls = json.dumps(tool_calls, sort_keys=True)
+        
+        # 创建一个简单的组合字符串作为哈希
+        hash_str = f"{role}:{content}:{tool_calls}"
+        return hash_str
 
 # Create a singleton instance
 db_service = DatabaseService()

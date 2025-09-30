@@ -6,6 +6,8 @@ export const sendMagicGenerate = async (payload: {
   canvasId: string
   newMessages: Message[]
   systemPrompt: string | null
+  textModel?: Model
+  selectedTools?: ToolInfo[]
 }) => {
   const response = await fetch(`/api/magic`, {
     method: 'POST',
@@ -17,6 +19,8 @@ export const sendMagicGenerate = async (payload: {
       canvas_id: payload.canvasId,
       session_id: payload.sessionId,
       system_prompt: payload.systemPrompt,
+      text_model: payload.textModel,
+      selected_tools: payload.selectedTools,
     }),
   })
   const data = await response.json()
@@ -24,8 +28,8 @@ export const sendMagicGenerate = async (payload: {
 }
 
 export const cancelMagicGenerate = async (sessionId: string) => {
-    const response = await fetch(`/api/magic/cancel/${sessionId}`, {
-        method: 'POST',
-    })
-    return await response.json()
+  const response = await fetch(`/api/magic/cancel/${sessionId}`, {
+    method: 'POST',
+  })
+  return await response.json()
 }

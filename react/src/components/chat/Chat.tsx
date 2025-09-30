@@ -34,12 +34,14 @@ import SessionSelector from './SessionSelector'
 import ChatSpinner from './Spinner'
 import ToolcallProgressUpdate from './ToolcallProgressUpdate'
 import ShareTemplateDialog from './ShareTemplateDialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Trash2 } from 'lucide-react'
 
 import { useConfigs } from '@/contexts/configs'
 import 'react-photo-view/dist/react-photo-view.css'
 import { DEFAULT_SYSTEM_PROMPT } from '@/constants'
 import { ModelInfo, ToolInfo } from '@/api/model'
-import { Button } from '@/components/ui/button'
 import { Share2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
@@ -64,6 +66,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const { initCanvas, setInitCanvas } = useConfigs()
   const { authStatus } = useAuth()
   const [showShareDialog, setShowShareDialog] = useState(false)
+  // 使用消息ID而不是索引来存储选中的消息
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -586,6 +591,104 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setPending(false)
   }, [])
 
+  const handleMessageClick = useCallback((message: Message, index: number, e?: React.MouseEvent) => {
+    // 防止事件冒泡影响其他交互
+    e?.stopPropagation();
+    
+    console.log('点击的消息:', message, '索引:', index)
+    
+    setSelectedMessageIds(prev => {
+      if (e?.ctrlKey || e?.metaKey) {
+        // 多选模式
+        return prev.includes(message.id) 
+          ? prev.filter(id => id !== message.id) 
+          : [...prev, message.id]
+      } else {
+        // 单选模式
+        return [message.id]
+      }
+    })
+    
+    console.log('当前选中的消息ID列表:', selectedMessageIds)
+  }, [selectedMessageIds])
+
+  const handleDeleteMessages = useCallback(async () => {
+    console.log('删除按钮被点击，开始处理删除操作');
+    
+    // 先关闭对话框
+    setShowDeleteDialog(false)
+    
+    // 检查是否有选中的消息
+    if (selectedMessageIds.length === 0) {
+      console.warn('没有选中的消息')
+      toast.warning('没有选中的消息')
+      return
+    }
+    
+    console.log(`准备删除${selectedMessageIds.length}条消息，消息ID:`, selectedMessageIds)
+    
+    try {
+      // 获取要删除的消息信息
+      const messagesToDelete = selectedMessageIds.map(messageId => {
+        const msg = messages.find(m => m.id === messageId);
+        return {
+          id: messageId,  // 数据库中的id
+          session_id: sessionId,
+          created_at: msg?.created_at || null
+        };
+      }).filter(msg => msg !== undefined);
+      
+      console.log('要删除的消息信息:', messagesToDelete)
+      
+      // 如果有sessionId，先通知后端删除消息
+      if (sessionId) {
+        console.log(`向服务器发送删除请求，会话ID: ${sessionId}`)
+        const response = await fetch(`/api/chat_session/${sessionId}/delete_messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messages: messagesToDelete }),
+        })
+        
+        if (!response.ok) {
+          console.error(`服务器响应错误: ${response.status}`)
+          const errorText = await response.text()
+          console.error('错误详情:', errorText)
+          throw new Error(`服务器响应错误: ${response.status}`)
+        }
+        
+        const result = await response.json()
+        console.log('服务器返回结果:', result)
+        if (result.success) {
+          console.log(`成功删除了${result.deleted_count}条消息`)
+          
+          // 后端删除成功后，再更新前端消息状态
+          const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id))
+          setMessages(newMessages)
+          setSelectedMessageIds([])
+          toast.success('消息已删除')
+        } else {
+          throw new Error('后端删除失败')
+        }
+      } else {
+        // 本地模式下，直接更新前端状态
+        const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id))
+        setMessages(newMessages)
+        setSelectedMessageIds([])
+        toast.success('消息已删除')
+      }
+    } catch (error) {
+      console.error('删除消息失败:', error)
+      toast.error('删除消息失败，请重试')
+      // 保持选中状态，以便用户可以再次尝试
+    }
+  }, [selectedMessageIds, sessionId, messages, setMessages, setShowDeleteDialog])
+
+  const clearSelection = useCallback(() => {
+    setSelectedMessageIds([])
+  }, [])
+
   return (
     <PhotoProvider>
       <div className='flex flex-col h-screen relative'>
@@ -620,8 +723,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {messages.length > 0 ? (
             <div className='flex flex-col flex-1 px-4 pb-50 pt-15'>
               {/* Messages */}
-              {messages.map((message, idx) => (
-                <div key={`${idx}`} className='flex flex-col gap-4 mb-2'>
+                  {messages.map((message, idx) => (
+                    <div 
+                      key={message.id}
+                      className={`flex flex-col gap-4 mb-2 ${selectedMessageIds.includes(message.id) ? 'bg-primary/10 rounded-lg p-2' : ''}`}
+                      onClick={(e) => handleMessageClick(message, idx, e)}
+                    >
+                      {/* 选择指示器 - 更明显的样式 */}
+                      {selectedMessageIds.includes(message.id) && (
+                        <div className='absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary flex items-center justify-center border border-primary-foreground shadow-sm z-10'>
+                          <div className='w-2 h-2 rounded-full bg-white'></div>
+                        </div>
+                      )}
+                      {/* 点击提示 */}
+                      {!selectedMessageIds.includes(message.id) && (
+                        <div className='absolute -right-2 top-2 text-xs text-muted-foreground opacity-50 pointer-events-none'>
+                          点击选择
+                        </div>
+                      )}
+                  
                   {/* Regular message content */}
                   {typeof message.content == 'string' &&
                     (message.role !== 'tool' ? (
@@ -739,6 +859,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </ScrollArea>
 
         <div className='p-2 gap-2 sticky bottom-0'>
+          {/* 删除选中消息按钮 */}
+              {selectedMessageIds.length > 0 && (
+                <div className='flex justify-between items-center mb-2 p-2 bg-background rounded-md border border-border shadow-sm'>
+                  <span className='text-sm font-medium text-foreground'>
+                    已选择 {selectedMessageIds.length} 条消息
+                  </span>
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={(e) => {e.stopPropagation(); setShowDeleteDialog(true); console.log('删除对话框已显示，选中的消息ID:', selectedMessageIds);}}
+                    className="flex items-center gap-1 px-3 hover:bg-destructive/90 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    删除
+                  </Button>
+                </div>
+              )}
+          
           <ChatTextarea
             sessionId={sessionId!}
             pending={!!pending}
@@ -767,6 +905,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         sessionId={sessionId || ''}
         messages={messages}
       />
+      
+      {/* 删除消息确认对话框 */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除消息</DialogTitle>
+            <DialogDescription>
+              您确定要删除选中的 {selectedMessageIds.length} 条消息吗？此操作无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => {setShowDeleteDialog(false); console.log('删除操作已取消');}}>取消</Button>
+            <Button variant="destructive" onClick={() => {console.log('确认删除按钮被点击'); handleDeleteMessages();}}>
+              确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PhotoProvider>
   )
 }

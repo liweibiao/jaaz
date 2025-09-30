@@ -97,6 +97,9 @@ if __name__ == "__main__":
     os.environ["no_proxy"] = os.environ["NO_PROXY"] = ",".join(
         sorted(_bypass | current - {""}))
 
+    # 无论是否设置了DEV_ENV环境变量，都确保代理设置被正确应用
+    # 这里不需要额外的代理设置逻辑，因为settings_service模块在导入时已经初始化了代理环境变量
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=57988,
                         help='Port to run the server on')

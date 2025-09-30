@@ -23,7 +23,7 @@ const ChatMagicGenerator: React.FC<ChatMagicGeneratorProps> = ({
     setPending,
     scrollToBottom
 }) => {
-    const { setShowLoginDialog } = useConfigs()
+    const { setShowLoginDialog, textModel, selectedTools } = useConfigs()
     const { authStatus } = useAuth()
 
     const handleMagicGenerate = useCallback(
@@ -65,6 +65,8 @@ const ChatMagicGenerator: React.FC<ChatMagicGeneratorProps> = ({
                     canvasId: canvasId,
                     newMessages: newMessages,
                     systemPrompt: localStorage.getItem('system_prompt') || DEFAULT_SYSTEM_PROMPT,
+                    textModel: textModel,
+                    selectedTools: selectedTools
                 })
 
                 scrollToBottom()

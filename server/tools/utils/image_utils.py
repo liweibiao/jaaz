@@ -35,21 +35,83 @@ async def get_image_info_and_save(
     """
     try:
         if is_b64:
-            image_data = base64.b64decode(url)
+            # 如果是base64字符串，检查是否包含前缀并去除
+            if url.startswith('data:image/'):
+                # 提取base64部分
+                url = url.split(',')[1]
+            
+            try:
+                image_data = base64.b64decode(url)
+                print(f"成功解码base64数据，大小: {len(image_data)} bytes")
+            except Exception as e:
+                print(f"base64解码失败: {e}")
+                # 尝试修复base64字符串（可能有填充问题）
+                url += '=' * ((4 - len(url) % 4) % 4)
+                image_data = base64.b64decode(url)
+                print(f"尝试修复后解码成功，大小: {len(image_data)} bytes")
         else:
             # Fetch the image asynchronously
+            print(f"尝试从URL获取图片: {url}")
             async with HttpClient.create_aiohttp() as session:
                 async with session.get(url) as response:
+                    # 检查响应状态
+                    if response.status != 200:
+                        raise Exception(f"获取图片失败，状态码: {response.status}")
+                    
                     # Read the image content as bytes
                     image_data = await response.read()
+                    print(f"成功获取图片数据，大小: {len(image_data)} bytes")
+                    
+                    # 检查响应头中的内容类型
+                    content_type = response.headers.get('content-type', '')
+                    print(f"图片Content-Type: {content_type}")
 
-        # Open image to get info
-        image = Image.open(BytesIO(image_data))
-        width, height = image.size
+        # 简单验证图片数据
+        if not image_data or len(image_data) < 10:
+            raise Exception("图片数据为空或过小")
+            
+        # 检查常见图片文件头
+        image_signatures = {
+            b'\xff\xd8': 'JPEG',
+            b'\x89PNG': 'PNG',
+            b'GIF8': 'GIF',
+            b'RIFF': 'WebP'
+        }
         
-        # Store original format for debugging
-        original_format = image.format or 'Unknown'
-        print(f"Converting {original_format} image to PNG: {width}x{height}")
+        file_signature = image_data[:4]  # 读取前4个字节
+        detected_type = 'Unknown'
+        for sig, type_name in image_signatures.items():
+            if file_signature.startswith(sig):
+                detected_type = type_name
+                break
+        
+        print(f"检测到的图片类型: {detected_type}")
+        
+        # Open image to get info
+        try:
+            image = Image.open(BytesIO(image_data))
+            width, height = image.size
+            
+            # Store original format for debugging
+            original_format = image.format or 'Unknown'
+            print(f"Converting {original_format} image to PNG: {width}x{height}")
+        except Exception as e:
+            print(f"无法打开图片: {e}")
+            # 尝试使用备用方法处理
+            if detected_type == 'PNG' or file_signature.startswith(b'\x89PNG'):
+                # 直接保存PNG数据
+                extension = 'png'
+                mime_type = 'image/png'
+                # 无法获取宽高，使用默认值
+                width, height = 512, 512
+                file_path = f"{file_path_without_extension}.{extension}"
+                with open(file_path, 'wb') as f:
+                    f.write(image_data)
+                print(f"直接保存PNG文件: {file_path}")
+                return mime_type, width, height, extension
+            else:
+                # 抛出异常继续处理
+                raise e
 
         # Handle different color modes properly for PNG conversion
         if image.mode == 'P':
@@ -118,6 +180,11 @@ async def get_image_info_and_save(
 
     except Exception as e:
         print(f"Error processing image: {e}")
+        # 添加更多调试信息
+        if 'image_data' in locals():
+            print(f"图片数据长度: {len(image_data)} bytes")
+            print(f"前10个字节: {image_data[:10]}")
+        traceback.print_exc()
         raise e
 
 

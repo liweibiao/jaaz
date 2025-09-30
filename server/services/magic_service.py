@@ -28,12 +28,14 @@ async def handle_magic(data: Dict[str, Any]) -> None:
             - session_id: unique session identifier
             - canvas_id: canvas identifier (contextual use)
             - text_model: text model configuration
-            - tool_list: list of tool model configurations (images/videos)
+            - selected_tools: list of selected tool models
     """
     # Extract fields from incoming data
     messages: List[Dict[str, Any]] = data.get('messages', [])
     session_id: str = data.get('session_id', '')
     canvas_id: str = data.get('canvas_id', '')
+    text_model: Dict[str, Any] = data.get('text_model', {})
+    selected_tools: List[Dict[str, Any]] = data.get('selected_tools', [])
 
     # print('✨ magic_service 接收到数据:', {
     #     'session_id': session_id,
@@ -54,7 +56,7 @@ async def handle_magic(data: Dict[str, Any]) -> None:
         )
 
     # Create and start magic generation task
-    task = asyncio.create_task(_process_magic_generation(messages, session_id, canvas_id))
+    task = asyncio.create_task(_process_magic_generation(messages, session_id, canvas_id, text_model, selected_tools))
 
     # Register the task in stream_tasks (for possible cancellation)
     add_stream_task(session_id, task)
@@ -76,6 +78,8 @@ async def _process_magic_generation(
     messages: List[Dict[str, Any]],
     session_id: str,
     canvas_id: str,
+    text_model: Dict[str, Any],
+    selected_tools: List[Dict[str, Any]]
 ) -> None:
     """
     Process magic generation in a separate async task.
@@ -84,9 +88,11 @@ async def _process_magic_generation(
         messages: List of messages
         session_id: Session ID
         canvas_id: Canvas ID
+        text_model: Text model configuration
+        selected_tools: List of selected tool models
     """
 
-    ai_response = await create_jaaz_response(messages, session_id, canvas_id)
+    ai_response = await create_jaaz_response(messages, session_id, canvas_id, text_model, selected_tools)
 
     # Save AI response to database
     await db_service.create_message(session_id, 'assistant', json.dumps(ai_response))

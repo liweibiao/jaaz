@@ -252,6 +252,7 @@ class SettingsService:
         2. 与新数据进行合并（深度合并字典类型）
         3. 保存更新后的设置到文件
         4. 更新全局设置缓存
+        5. 如果更新了代理设置，重新应用代理环境变量
 
         Args:
             data (dict): 要更新的设置数据，可以是部分设置
@@ -276,6 +277,9 @@ class SettingsService:
                 except Exception as e:
                     print(f"Error reading existing settings: {e}")
 
+            # 检查是否更新了代理设置
+            is_proxy_updated = "proxy" in data
+
             # 合并新数据到现有设置
             for key, value in data.items():
                 if key in existing_settings and isinstance(existing_settings[key], dict) and isinstance(value, dict):
@@ -296,6 +300,10 @@ class SettingsService:
             global app_settings
             app_settings = existing_settings
 
+            # 如果更新了代理设置，重新应用代理环境变量
+            if is_proxy_updated:
+                initialize_proxy_env()
+
             return {"status": "success", "message": "Settings updated successfully"}
         except Exception as e:
             traceback.print_exc()
@@ -309,3 +317,34 @@ settings_service = SettingsService()
 # 在模块导入时初始化设置
 # 确保全局设置缓存在应用启动时就被加载
 settings_service.get_raw_settings()
+
+# 初始化代理环境变量
+def initialize_proxy_env():
+    """
+    初始化代理环境变量
+    将设置中的代理配置应用到系统环境变量中
+    """
+    import os
+    from services.settings_service import settings_service
+    
+    proxy_config = settings_service.get_proxy_config()
+    
+    # 清除现有的代理环境变量
+    for env_key in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+        if env_key in os.environ:
+            del os.environ[env_key]
+    
+    # 根据代理配置设置环境变量
+    if proxy_config == 'system':
+        # 系统代理模式 - 保留系统现有的代理环境变量
+        pass
+    elif proxy_config == 'no_proxy':
+        # 不使用代理 - 确保没有代理环境变量
+        pass
+    elif proxy_config.startswith(('http://', 'https://', 'socks4://', 'socks5://')):
+        # 自定义代理URL - 设置为环境变量
+        os.environ['HTTP_PROXY'] = os.environ['http_proxy'] = proxy_config
+        os.environ['HTTPS_PROXY'] = os.environ['https_proxy'] = proxy_config
+
+# 初始应用代理设置
+initialize_proxy_env()

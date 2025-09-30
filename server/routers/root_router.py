@@ -132,9 +132,24 @@ async def list_tools() -> list[ToolInfoJson]:
 
 @router.get("/list_chat_sessions")
 async def list_chat_sessions():
-    return await db_service.list_sessions()
+    # 调用list_sessions时传入canvas_id参数
+    return await db_service.list_sessions("test")
 
 
 @router.get("/chat_session/{session_id}")
 async def get_chat_session(session_id: str):
     return await db_service.get_chat_history(session_id)
+
+
+@router.post("/chat_session/{session_id}/update")
+async def update_chat_session(session_id: str, messages: list[dict]):
+    """Update chat session messages"""
+    await db_service.update_chat_messages(session_id, messages)
+    return {"success": True}
+
+@router.post("/chat_session/{session_id}/delete_messages")
+async def delete_chat_session_messages(session_id: str, data: dict):
+    """Delete specific chat messages by id or session_id+created_at"""
+    messages_to_delete = data.get('messages', [])
+    result = await db_service.delete_chat_messages(session_id, messages_to_delete)
+    return result
