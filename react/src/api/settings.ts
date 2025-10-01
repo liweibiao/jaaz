@@ -198,3 +198,26 @@ export const getMyAssetsDirPath = async () => {
 
 // PNG metadata 现在通过前端直接读取 (readPNGMetadata in @/utils/pngMetadata)
 // 这样更快，避免了后端处理的开销
+
+// 删除文件API
+export const deleteFilesApi = async (filePaths: string[]): Promise<void> => {
+  try {
+    // 逐个删除文件
+    for (const filePath of filePaths) {
+      const response = await fetch('/api/delete_file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: filePath }),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to delete file: ${filePath}`)
+      }
+    }
+  } catch (error) {
+    console.error('Error deleting files:', error)
+    throw error
+  }
+}

@@ -53,7 +53,15 @@ export default function TopMenu({
           onClick={() => navigate({ to: '/assets' })}
         >
           <ImageIcon className="size-4" />
-          {t('canvas:assets', 'Library')}
+          {t('home:Library', '素材库')}
+        </Button>
+        <Button
+          variant={window.location.pathname === '/template' ? 'default' : 'ghost'}
+          size="sm"
+          className={cn('flex items-center font-bold rounded-none')}
+          onClick={() => window.location.href = '/templates'}
+        >
+          {t('home:Templates', '模板')}
         </Button>
       </div>
 

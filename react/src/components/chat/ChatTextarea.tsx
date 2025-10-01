@@ -7,6 +7,7 @@ import {
   eventBus,
   TCanvasAddImagesToChatEvent,
   TMaterialAddImagesToChatEvent,
+  TTemplateSendToChatEvent,
 } from '@/lib/event'
 import { cn, dataURLToFile } from '@/lib/utils'
 import { Message, MessageContent, Model } from '@/types/types'
@@ -338,11 +339,35 @@ const ChatTextarea: React.FC<ChatTextareaProps> = ({
       textareaRef.current?.focus()
     }
 
+    // 处理模板发送到聊天窗口
+    const handleTemplateSendToChat = (data: TTemplateSendToChatEvent) => {
+      // 设置提示词
+      setPrompt(data.prompt)
+      
+      // 上传图片
+      for (const image of data.images) {
+        try {
+          // 从base64创建File对象
+          const file = dataURLToFile(image.base64, image.fileName)
+          uploadImageMutation(file)
+        } catch (error) {
+          console.error('Failed to upload image from template:', error)
+          toast.error('Failed to upload image from template', {
+            description: `${error}`,
+          })
+        }
+      }
+      
+      textareaRef.current?.focus()
+    }
+    
     eventBus.on('Canvas::AddImagesToChat', handleAddImagesToChat)
     eventBus.on('Material::AddImagesToChat', handleMaterialAddImagesToChat)
+    eventBus.on('Template::SendToChat', handleTemplateSendToChat)
     return () => {
       eventBus.off('Canvas::AddImagesToChat', handleAddImagesToChat)
       eventBus.off('Material::AddImagesToChat', handleMaterialAddImagesToChat)
+      eventBus.off('Template::SendToChat', handleTemplateSendToChat)
     }
   }, [uploadImageMutation])
 

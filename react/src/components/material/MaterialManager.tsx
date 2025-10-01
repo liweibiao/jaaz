@@ -1,27 +1,4 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FolderOpen,
-  Image,
-  Play,
-  File,
-  Grid,
-  List,
-  RefreshCw,
-  FileText,
-  Music,
-  Archive,
-  Code,
-  Eye,
-  Star,
-  Heart,
-  MoreHorizontal,
-  ExternalLink,
-  Info,
-  X,
-  MessageCirclePlus,
-} from 'lucide-react'
+import {  ChevronDown,  ChevronRight,  Folder,  FolderOpen,  Image,  Play,  File,  Grid,  List,  RefreshCw,  FileText,  Music,  Archive,  Code,  Eye,  Star,  Heart,  MoreHorizontal,  ExternalLink,  Info,  X,  MessageCirclePlus,  CheckCircle2,  Circle,  Trash2,  Filter,} from 'lucide-react'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   browseFolderApi,
@@ -29,6 +6,7 @@ import {
   getFileServiceUrl,
   openFolderInExplorer,
   getMyAssetsDirPath,
+  deleteFilesApi,
 } from '@/api/settings'
 import { readPNGMetadata } from '@/utils/pngMetadata'
 import FilePreviewModal from './FilePreviewModal'
@@ -46,6 +24,7 @@ interface FileSystemItem {
   is_directory: boolean
   is_media: boolean
   has_thumbnail: boolean
+  is_unused?: boolean // 可选属性，标记文件是否未使用
 }
 
 interface BrowseResult {
@@ -229,6 +208,9 @@ export default function MaterialManager() {
     fileName: '',
     fileType: '',
   })
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
+  const [filterUnused, setFilterUnused] = useState(false)
   const myAssetsPath = useRef<string>('')
   const { t } = useTranslation()
 
@@ -352,36 +334,110 @@ export default function MaterialManager() {
 
   const handleFileClick = useCallback(
     async (file: FileSystemItem) => {
-      // if (!file.is_media) return
+      if (isMultiSelectMode) {
+        toggleFileSelection(file.path)
+      } else {
+        // if (!file.is_media) return
 
-      const fileDetails: FileDetails = { ...file }
+        const fileDetails: FileDetails = { ...file }
 
-      // 如果是图片，获取尺寸信息
-      if (file.type === 'image') {
-        try {
-          const dimensions = await getImageDimensions(file.path)
-          fileDetails.dimensions = dimensions
-        } catch (error) {
-          console.error('Failed to get image dimensions:', error)
-        }
-
-        // 如果是PNG文件，获取metadata信息
-        if (file.path.toLowerCase().endsWith('.png')) {
+        // 如果是图片，获取尺寸信息
+        if (file.type === 'image') {
           try {
-            const pngMetadata = await readPNGMetadata(
-              getFileServiceUrl(file.path)
-            )
-            fileDetails.pngMetadata = pngMetadata
+            const dimensions = await getImageDimensions(file.path)
+            fileDetails.dimensions = dimensions
           } catch (error) {
-            console.error('Failed to get PNG metadata:', error)
+            console.error('Failed to get image dimensions:', error)
+          }
+
+          // 如果是PNG文件，获取metadata信息
+          if (file.path.toLowerCase().endsWith('.png')) {
+            try {
+              const pngMetadata = await readPNGMetadata(
+                getFileServiceUrl(file.path)
+              )
+              fileDetails.pngMetadata = pngMetadata
+            } catch (error) {
+              console.error('Failed to get PNG metadata:', error)
+            }
           }
         }
+
+        setSelectedFile(fileDetails)
+      }
+    },
+    [getImageDimensions, isMultiSelectMode]
+  )
+
+  // 切换文件选择状态
+  const toggleFileSelection = useCallback((filePath: string) => {
+    setSelectedFiles(prev => {
+      const newSelected = new Set(prev)
+      if (newSelected.has(filePath)) {
+        newSelected.delete(filePath)
+      } else {
+        newSelected.add(filePath)
+      }
+      return newSelected
+    })
+  }, [])
+
+  // 删除选中的文件
+  const handleDeleteFiles = useCallback(async () => {
+    if (selectedFiles.size === 0) return
+
+    const confirmDelete = window.confirm(
+      t(
+        'canvas:confirmDeleteFiles',
+        'Are you sure you want to delete the selected files? This action cannot be undone.'
+      )
+    )
+
+    if (!confirmDelete) return
+
+    setLoading(true)
+    try {
+      const filePaths = Array.from(selectedFiles)
+      // 调用删除文件API
+      await deleteFilesApi(filePaths)
+      
+      // 清空选中状态
+      setSelectedFiles(new Set())
+      setIsMultiSelectMode(false)
+      
+      // 重新加载当前文件夹
+      if (selectedFolder) {
+        loadFolder(selectedFolder.path)
+      }
+    } catch (err) {
+      setError(t('canvas:deleteFilesFailed', 'Failed to delete files'))
+      console.error('Delete files failed:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedFiles, selectedFolder])
+
+  // 处理键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMultiSelectMode(false)
+        setSelectedFiles(new Set())
       }
 
-      setSelectedFile(fileDetails)
-    },
-    [getImageDimensions]
-  )
+      if (isMultiSelectMode && e.key === 'Delete') {
+        handleDeleteFiles()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isMultiSelectMode, handleDeleteFiles])
+
+  // 处理未使用图片的筛选
+  const handleFilterUnusedChange = useCallback(() => {
+    setFilterUnused(prev => !prev)
+  }, [])
 
   const handleAddToChat = useCallback(
     (file: FileSystemItem, event?: React.MouseEvent) => {
@@ -479,9 +535,17 @@ export default function MaterialManager() {
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const filteredMediaFiles = mediaFiles.filter((file) =>
-    file.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // 筛选媒体文件：搜索和未使用筛选
+  const filteredMediaFiles = mediaFiles.filter((file) => {
+    const matchesSearch = file.name.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    // 如果启用了未使用筛选，并且文件是图片，检查是否有未使用标记
+    // 检查文件是否满足未使用筛选条件
+    const matchesUnusedFilter = !filterUnused || 
+      (file.type === 'image' && file.is_unused === true)
+    
+    return matchesSearch && matchesUnusedFilter
+  })
 
   // 递归搜索所有文件夹内容
   const searchInFolderContents = useCallback(
@@ -600,14 +664,25 @@ export default function MaterialManager() {
         {filteredMediaFiles.map((file) => (
           <div
             key={file.path}
-            className={`group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border cursor-pointer ${
-              selectedFile?.path === file.path
-                ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
-                : 'border-gray-200 dark:border-gray-700'
-            }`}
+            className={`group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border cursor-pointer ${selectedFile?.path === file.path ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800' : 'border-gray-200 dark:border-gray-700'} ${isMultiSelectMode && selectedFiles.has(file.path) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950' : ''}`}
             onClick={() => handleFileClick(file)}
           >
             <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center overflow-hidden relative">
+              {isMultiSelectMode && (
+                <div className="absolute top-2 left-2 z-10">
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-colors ${selectedFiles.has(file.path) ? 'bg-blue-500 text-white' : 'bg-white/80 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleFileSelection(file.path)
+                    }}
+                  >
+                    {selectedFiles.has(file.path) && (
+                      <CheckCircle2 className="w-3 h-3" />
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Model Badge for PNG images */}
               <ImageModelBadge filePath={file.path} fileName={file.name} />
 
@@ -667,14 +742,25 @@ export default function MaterialManager() {
         {filteredMediaFiles.map((file) => (
           <div
             key={file.path}
-            className={`flex items-center gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-md transition-shadow min-w-0 cursor-pointer ${
-              selectedFile?.path === file.path
-                ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
-                : 'border-gray-200 dark:border-gray-700'
-            }`}
+            className={`flex items-center gap-4 p-3 bg-white dark:bg-gray-800 rounded-lg border hover:shadow-md transition-shadow min-w-0 cursor-pointer ${selectedFile?.path === file.path ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800' : 'border-gray-200 dark:border-gray-700'} ${isMultiSelectMode && selectedFiles.has(file.path) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950' : ''}`}
             onClick={() => handleFileClick(file)}
           >
             <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 relative">
+              {isMultiSelectMode && (
+                <div className="absolute top-1 left-1 z-10">
+                  <div
+                    className={`w-4 h-4 rounded-full flex items-center justify-center cursor-pointer transition-colors ${selectedFiles.has(file.path) ? 'bg-blue-500 text-white' : 'bg-white/80 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleFileSelection(file.path)
+                    }}
+                  >
+                    {selectedFiles.has(file.path) && (
+                      <CheckCircle2 className="w-2 h-2" />
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Model Badge for PNG images in list view */}
               {file.type === 'image' &&
                 file.name.toLowerCase().endsWith('.png') && (
@@ -1014,27 +1100,67 @@ export default function MaterialManager() {
 
             {selectedFolder && (
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    viewMode === 'grid'
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-lg transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                <Grid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleFilterUnusedChange}
+                className={`flex items-center gap-1 ${filterUnused ? 'text-blue-600 dark:text-blue-400' : ''}`}
+              >
+                <Filter className="w-4 h-4" />
+                <span className="hidden sm:inline">
+                  {t('canvas:filterUnused', 'Unused')}
+                </span>
+              </Button>
+              <Button
+                variant={isMultiSelectMode ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setIsMultiSelectMode(!isMultiSelectMode)}
+                className="flex items-center gap-1"
+              >
+                {isMultiSelectMode ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <Circle className="w-4 h-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {t('canvas:select', 'Select')}
+                </span>
+              </Button>
+              {isMultiSelectMode && selectedFiles.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteFiles}
+                  disabled={loading}
+                  className="flex items-center gap-1"
                 >
-                  <Grid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">
+                    删除图片 ({selectedFiles.size})
+                  </span>
+                </Button>
+              )}
+            </div>
             )}
           </div>
         </div>

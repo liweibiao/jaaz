@@ -7,7 +7,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 print('Importing websocket_router')
 from routers.websocket_router import *  # DO NOT DELETE THIS LINE, OTHERWISE, WEBSOCKET WILL NOT WORK
 print('Importing routers')
-from routers import config_router, image_router, root_router, workspace, canvas, ssl_test, chat_router, settings, tool_confirmation
+from routers import config_router, image_router, root_router, workspace, canvas, ssl_test, chat_router, settings, tool_confirmation, templates_router
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI
@@ -24,6 +24,8 @@ print('Importing config_service')
 from services.config_service import config_service
 print('Importing tool_service')
 from services.tool_service import tool_service
+# 添加CORS中间件支持
+from fastapi.middleware.cors import CORSMiddleware
 
 async def initialize():
     print('Initializing config_service')
@@ -45,6 +47,15 @@ async def lifespan(app: FastAPI):
 print('Creating FastAPI app')
 app = FastAPI(lifespan=lifespan)
 
+# 添加CORS中间件配置，允许所有源访问
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有源访问
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有HTTP方法
+    allow_headers=["*"],  # 允许所有HTTP头部
+)
+
 # Include routers
 print('Including routers')
 app.include_router(config_router.router)
@@ -56,6 +67,7 @@ app.include_router(image_router.router)
 app.include_router(ssl_test.router)
 app.include_router(chat_router.router)
 app.include_router(tool_confirmation.router)
+app.include_router(templates_router.router)
 
 # Mount the React build directory
 react_build_dir = os.environ.get('UI_DIST_DIR', os.path.join(

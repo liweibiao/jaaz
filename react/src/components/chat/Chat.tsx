@@ -595,22 +595,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     // 防止事件冒泡影响其他交互
     e?.stopPropagation();
     
-    console.log('点击的消息:', message, '索引:', index)
+    // 确保消息有id，没有则生成临时id
+    const messageId = message.id || `temp-${nanoid()}`;
     
     setSelectedMessageIds(prev => {
-      if (e?.ctrlKey || e?.metaKey) {
-        // 多选模式
-        return prev.includes(message.id) 
-          ? prev.filter(id => id !== message.id) 
-          : [...prev, message.id]
-      } else {
-        // 单选模式
-        return [message.id]
-      }
+      const newSelection = e?.ctrlKey || e?.metaKey
+        ? prev.includes(messageId) 
+          ? prev.filter(id => id !== messageId) 
+          : [...prev, messageId]
+        : [messageId];
+      
+      // 注意：在useCallback中，selectedMessageIds是捕获的值，不会实时更新
+      // 所以这里不记录selectedMessageIds，而是在组件其他地方监控状态变化
+      return newSelection;
     })
-    
-    console.log('当前选中的消息ID列表:', selectedMessageIds)
-  }, [selectedMessageIds])
+  }, [])
 
   const handleDeleteMessages = useCallback(async () => {
     console.log('删除按钮被点击，开始处理删除操作');
@@ -631,12 +630,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       // 获取要删除的消息信息
       const messagesToDelete = selectedMessageIds.map(messageId => {
         const msg = messages.find(m => m.id === messageId);
+        // 确保id存在，使用临时id的消息不会实际删除后端数据
         return {
           id: messageId,  // 数据库中的id
-          session_id: sessionId,
+          session_id: sessionId || '',
           created_at: msg?.created_at || null
         };
-      }).filter(msg => msg !== undefined);
+      }).filter((msg): msg is { id: string; session_id: string; created_at: string | null } => msg !== undefined);
       
       console.log('要删除的消息信息:', messagesToDelete)
       
@@ -664,7 +664,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           console.log(`成功删除了${result.deleted_count}条消息`)
           
           // 后端删除成功后，再更新前端消息状态
-          const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id))
+          const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id || ''))
           setMessages(newMessages)
           setSelectedMessageIds([])
           toast.success('消息已删除')
@@ -673,7 +673,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         }
       } else {
         // 本地模式下，直接更新前端状态
-        const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id))
+        const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id || ''))
         setMessages(newMessages)
         setSelectedMessageIds([])
         toast.success('消息已删除')
@@ -723,118 +723,118 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {messages.length > 0 ? (
             <div className='flex flex-col flex-1 px-4 pb-50 pt-15'>
               {/* Messages */}
-                  {messages.map((message, idx) => (
-                    <div 
-                      key={message.id}
-                      className={`flex flex-col gap-4 mb-2 ${selectedMessageIds.includes(message.id) ? 'bg-primary/10 rounded-lg p-2' : ''}`}
-                      onClick={(e) => handleMessageClick(message, idx, e)}
-                    >
-                      {/* 选择指示器 - 更明显的样式 */}
-                      {selectedMessageIds.includes(message.id) && (
-                        <div className='absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary flex items-center justify-center border border-primary-foreground shadow-sm z-10'>
-                          <div className='w-2 h-2 rounded-full bg-white'></div>
-                        </div>
-                      )}
-                      {/* 点击提示 */}
-                      {!selectedMessageIds.includes(message.id) && (
-                        <div className='absolute -right-2 top-2 text-xs text-muted-foreground opacity-50 pointer-events-none'>
-                          点击选择
-                        </div>
-                      )}
-                  
-                  {/* Regular message content */}
-                  {typeof message.content == 'string' &&
-                    (message.role !== 'tool' ? (
-                      <MessageRegular
-                        message={message}
-                        content={message.content}
-                      />
-                    ) : message.tool_call_id &&
-                      mergedToolCallIds.current.includes(
-                        message.tool_call_id
-                      ) ? (
-                      <></>
-                    ) : (
-                      <ToolCallContent
-                        expandingToolCalls={expandingToolCalls}
-                        message={message}
-                      />
-                    ))}
-
-                  {/* 混合内容消息的文本部分 - 显示在聊天框内 */}
-                  {Array.isArray(message.content) && (
-                    <>
-                      <MixedContentImages
-                        contents={message.content}
-                      />
-                      <MixedContentText
-                        message={message}
-                        contents={message.content}
-                      />
-                    </>
-                  )}
-
-                  {message.role === 'assistant' &&
-                    message.tool_calls &&
-                    message.tool_calls.at(-1)?.function.name != 'finish' &&
-                    message.tool_calls.map((toolCall, i) => {
-                      return (
-                        <ToolCallTag
-                          key={toolCall.id}
-                          toolCall={toolCall}
-                          isExpanded={expandingToolCalls.includes(toolCall.id)}
-                          onToggleExpand={() => {
-                            if (expandingToolCalls.includes(toolCall.id)) {
-                              setExpandingToolCalls((prev) =>
-                                prev.filter((id) => id !== toolCall.id)
-                              )
-                            } else {
-                              setExpandingToolCalls((prev) => [
-                                ...prev,
-                                toolCall.id,
-                              ])
-                            }
-                          }}
-                          requiresConfirmation={pendingToolConfirmations.includes(
-                            toolCall.id
-                          )}
-                          onConfirm={() => {
-                            // 发送确认事件到后端
-                            fetch('/api/tool_confirmation', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              body: JSON.stringify({
-                                session_id: sessionId,
-                                tool_call_id: toolCall.id,
-                                confirmed: true,
-                              }),
-                            })
-                          }}
-                          onCancel={() => {
-                            // 发送取消事件到后端
-                            fetch('/api/tool_confirmation', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              body: JSON.stringify({
-                                session_id: sessionId,
-                                tool_call_id: toolCall.id,
-                                confirmed: false,
-                              }),
-                            })
-                          }}
+              {messages.map((message, idx) => {
+                // 确保消息有id，没有则生成临时id用于前端渲染
+                const messageId = message.id || `temp-${nanoid()}`;
+                return (
+                  <div 
+                    key={messageId}
+                    className={`flex flex-col gap-4 mb-2 ${selectedMessageIds.includes(messageId) ? 'bg-primary/10 rounded-lg p-2' : ''}`}
+                    onClick={(e) => handleMessageClick(message, idx, e)}
+                  >
+                    {/* 选择指示器 - 更明显的样式 */}
+                    {selectedMessageIds.includes(messageId) && (
+                      <div className='absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary flex items-center justify-center border border-primary-foreground shadow-sm z-10'>
+                        <div className='w-2 h-2 rounded-full bg-white'></div>
+                      </div>
+                    )}
+                    {/* 点击提示 */}
+                    {!selectedMessageIds.includes(messageId) && (
+                      <div className='absolute -right-2 top-2 text-xs text-muted-foreground opacity-50 pointer-events-none'>
+                        点击选择
+                      </div>
+                    )}
+                   
+                    {/* Regular message content */}
+                    {typeof message.content == 'string' &&
+                      (message.role !== 'tool' ? (
+                        <MessageRegular
+                          message={message}
+                          content={message.content || ''}
                         />
-                      )
-                    })}
-                </div>
-              ))}
-              {pending && <ChatSpinner pending={pending} />}
-              {pending && sessionId && (
-                <ToolcallProgressUpdate sessionId={sessionId} />
-              )}
+                      ) : message.tool_call_id &&
+                        mergedToolCallIds.current.includes(
+                          message.tool_call_id
+                        ) ? (
+                        <></>
+                      ) : (
+                        <ToolCallContent
+                          expandingToolCalls={expandingToolCalls}
+                          message={message}
+                        />
+                      ))}
+
+                    {/* 混合内容消息的文本部分 - 显示在聊天框内 */}
+                    {Array.isArray(message.content) && (
+                      <>
+                        <MixedContentImages
+                          contents={message.content}
+                        />
+                        <MixedContentText
+                          message={message}
+                          contents={message.content}
+                        />
+                      </>
+                    )}
+
+                    {message.role === 'assistant' &&
+                      message.tool_calls &&
+                      message.tool_calls.at(-1)?.function.name != 'finish' &&
+                      message.tool_calls.map((toolCall, i) => {
+                        return (
+                          <ToolCallTag
+                            key={toolCall.id}
+                            toolCall={toolCall}
+                            isExpanded={expandingToolCalls.includes(toolCall.id)}
+                            onToggleExpand={() => {
+                              if (expandingToolCalls.includes(toolCall.id)) {
+                                setExpandingToolCalls((prev) =>
+                                  prev.filter((id) => id !== toolCall.id)
+                                )
+                              } else {
+                                setExpandingToolCalls((prev) => [
+                                  ...prev,
+                                  toolCall.id,
+                                ])
+                              }
+                            }}
+                            requiresConfirmation={pendingToolConfirmations.includes(
+                              toolCall.id
+                            )}
+                            onConfirm={() => {
+                              // 发送确认事件到后端
+                              fetch('/api/tool_confirmation', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  session_id: sessionId,
+                                  tool_call_id: toolCall.id,
+                                  confirmed: true,
+                                }),
+                              })
+                            }}
+                            onCancel={() => {
+                              // 发送取消事件到后端
+                              fetch('/api/tool_confirmation', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  session_id: sessionId,
+                                  tool_call_id: toolCall.id,
+                                  confirmed: false,
+                                }),
+                              })
+                            }}
+                          />
+                        );
+                      })}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <motion.div className='flex flex-col h-full p-4 items-start justify-start pt-16 select-none'>
@@ -878,7 +878,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               )}
           
           <ChatTextarea
-            sessionId={sessionId!}
+            sessionId={sessionId || ''}
             pending={!!pending}
             messages={messages}
             onSendMessages={onSendMessages}

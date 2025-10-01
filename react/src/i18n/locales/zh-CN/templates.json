@@ -1,0 +1,20 @@
+{
+  "notFound": "模板未找到",
+  "loading": "加载模板中...",
+  "back": "返回模板库",
+  "downloads": "{{count}} 次下载",
+  "uploadImage": "上传图片",
+  "uploadPlaceholder": "点击或拖拽图片到此处上传",
+  "prompt": "提示词",
+  "promptPlaceholder": "编辑用于生成图片的提示词",
+  "cancel": "取消",
+  "submitting": "创建项目中...",
+  "createProject": "创建项目",
+  "createSuccess": "成功创建项目：{{name}}",
+  "createError": "创建项目失败",
+  "title": "模板",
+  "subtitle": "选择一个模板开始创作",
+  "searchPlaceholder": "搜索模板",
+  "allCategories": "全部分类",
+  "useTemplate": "使用模板"
+}

@@ -141,16 +141,14 @@ const CanvasExcali: React.FC<CanvasExcaliProps> = ({
       // 设置深色背景，但保持light主题以避免颜色反转
       excalidrawAPI.updateScene({
         appState: {
-          viewBackgroundColor: '#121212',
-          gridColor: 'rgba(255, 255, 255, 0.1)',
+          viewBackgroundColor: '#121212'
         }
       })
     } else if (excalidrawAPI && theme === 'light') {
       // 恢复浅色背景
       excalidrawAPI.updateScene({
         appState: {
-          viewBackgroundColor: '#ffffff',
-          gridColor: 'rgba(0, 0, 0, 0.1)',
+          viewBackgroundColor: '#ffffff'
         }
       })
     }
@@ -401,7 +399,7 @@ const CanvasExcali: React.FC<CanvasExcaliProps> = ({
     <Excalidraw
       theme={customTheme as Theme}
       langCode={i18n.language}
-      className={excalidrawClassName}
+      // Excalidraw组件不支持className属性，样式通过其他方式应用
       excalidrawAPI={(api) => {
         setExcalidrawAPI(api)
       }}

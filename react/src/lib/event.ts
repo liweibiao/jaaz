@@ -24,6 +24,16 @@ export type TMaterialAddImagesToChatEvent = {
   height?: number
 }[]
 
+// 模板相关事件类型
+export type TTemplateSendToChatEvent = {
+  prompt: string
+  images: Array<{
+    fileName: string
+    base64: string
+    apiUrl: string
+  }>
+}
+
 export type TEvents = {
   // ********** Socket events - Start **********
   'Socket::Session::Error': ISocket.SessionErrorEvent
@@ -50,6 +60,10 @@ export type TEvents = {
   // ********** Material events - Start **********
   'Material::AddImagesToChat': TMaterialAddImagesToChatEvent
   // ********** Material events - End **********
+  
+  // ********** Template events - Start **********
+  'Template::SendToChat': TTemplateSendToChatEvent
+  // ********** Template events - End **********
 }
 
 export const eventBus = mitt<TEvents>()

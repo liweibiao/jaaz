@@ -1,0 +1,15 @@
+{
+  "notFound": "Template not found",
+  "loading": "Loading template...",
+  "back": "Back to Template Library",
+  "downloads": "{{count}} downloads",
+  "uploadImage": "Upload Image",
+  "uploadPlaceholder": "Click or drag image here to upload",
+  "prompt": "Prompt",
+  "promptPlaceholder": "Edit the prompt for generating the image",
+  "cancel": "Cancel",
+  "submitting": "Creating project...",
+  "createProject": "Create Project",
+  "createSuccess": "Successfully created project: {{name}}",
+  "createError": "Failed to create project"
+}

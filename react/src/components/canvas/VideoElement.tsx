@@ -3,19 +3,19 @@ import { VideoPlayer, VideoPreview } from '@/components/ui/video-player'
 import { cn } from '@/lib/utils'
 
 interface VideoElementProps {
-    src: string
-    poster?: string
-    duration?: number
-    autoPlay?: boolean
-    loop?: boolean
-    muted?: boolean
-    className?: string
-    width?: number
-    height?: number
-    isPreview?: boolean
-    onClick?: () => void
-    onTimeUpdate?: (currentTime: number, duration: number) => void
-    onEnded?: () => void
+    src: string;
+    poster?: string;
+    duration?: number;
+    autoPlay?: boolean;
+    loop?: boolean;
+    muted?: boolean;
+    className?: string;
+    width?: number;
+    height?: number;
+    isPreview?: boolean;
+    onClick?: () => void;
+    onTimeUpdate?: (currentTime: number, duration: number) => void;
+    onEnded?: () => void;
 }
 
 export const VideoElement: React.FC<VideoElementProps> = ({
@@ -33,11 +33,11 @@ export const VideoElement: React.FC<VideoElementProps> = ({
     onTimeUpdate,
     onEnded,
 }) => {
-    const [isPlaying, setIsPlaying] = useState(false)
-    const [showFullPlayer, setShowFullPlayer] = useState(false)
-    const [isPaused, setIsPaused] = useState(false) // 跟踪是否被用户暂停
-    const [isHovered, setIsHovered] = useState(false) // 跟踪鼠标悬停状态
-    const videoRef = useRef<HTMLVideoElement>(null)
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [showFullPlayer, setShowFullPlayer] = useState(false);
+    const [isPaused, setIsPaused] = useState(false); // 跟踪是否被用户暂停
+    const [isHovered, setIsHovered] = useState(false); // 跟踪鼠标悬停状态
+    const videoRef = useRef<HTMLVideoElement>(null);
 
     // For canvas preview mode
     if (isPreview) {
@@ -177,20 +177,22 @@ export const VideoElement: React.FC<VideoElementProps> = ({
 }
 
 // Canvas-specific video component that integrates with Excalidraw elements
-export const CanvasVideoElement: React.FC<{
-    elementId: string
-    src: string
-    x: number
-    y: number
-    width: number
-    height: number
-    duration?: number
-    isSelected?: boolean
-    onSelect?: (e?: React.MouseEvent) => void
-    onDelete?: () => void
-    onResize?: (direction: string, e: React.MouseEvent) => void
-    onPaste?: (videoData: any) => void
-}> = ({
+interface CanvasVideoElementProps {
+    elementId: string;
+    src: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    duration?: number;
+    isSelected?: boolean;
+    onSelect?: (e?: React.MouseEvent<HTMLDivElement>) => void;
+    onDelete?: () => void;
+    onResize?: (direction: string, e: React.MouseEvent<HTMLDivElement>) => void;
+    onPaste?: (videoData: Record<string, any>) => void;
+}
+
+export const CanvasVideoElement: React.FC<CanvasVideoElementProps> = ({
     elementId,
     src,
     x,
@@ -330,10 +332,10 @@ export const CanvasVideoElement: React.FC<{
                     isPreview={false}
                     muted={true}
                     autoPlay={false}
-                    onClick={(e) => {
-                        console.log('🎬 VideoElement clicked')
-                        // Don't call onSelect again - already handled by parent div
-                    }}
+                    onClick={() => {
+                    console.log('🎬 VideoElement clicked')
+                    // Don't call onSelect again - already handled by parent div
+                }}
                 />
 
                 {/* Selection border and resize handles */}
