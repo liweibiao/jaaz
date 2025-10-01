@@ -358,7 +358,13 @@ const ChatTextarea: React.FC<ChatTextareaProps> = ({
         }
       }
       
+      // 聚焦到输入框
       textareaRef.current?.focus()
+      
+      // 显示提示消息，告知用户模板已加载到聊天框
+      toast.success('模板已加载到聊天框', {
+        description: '图片和提示词已准备就绪，可以直接发送',
+      })
     }
     
     eventBus.on('Canvas::AddImagesToChat', handleAddImagesToChat)

@@ -333,5 +333,165 @@ class DatabaseService:
         hash_str = f"{role}:{content}:{tool_calls}"
         return hash_str
 
+    async def get_templates(self, category: str = None, search: str = None, page: int = 1, limit: int = 12, sort_by: str = 'created_at', sort_order: str = 'desc') -> Dict[str, Any]:
+        """Get templates with pagination, search and filtering"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            query_parts = []
+            params = []
+            
+            # Base query
+            query_parts.append("SELECT id, title, description, image, tags, category, created_at FROM templates")
+            
+            # Add where clauses
+            where_clauses = []
+            if category:
+                where_clauses.append("category = ?")
+                params.append(category)
+            if search:
+                where_clauses.append("(title LIKE ? OR description LIKE ?)")
+                search_param = f"%{search}%"
+                params.append(search_param)
+                params.append(search_param)
+            
+            if where_clauses:
+                query_parts.append("WHERE " + " AND ".join(where_clauses))
+            
+            # Add sorting
+            valid_sort_fields = ['created_at', 'title', 'updated_at']
+            if sort_by not in valid_sort_fields:
+                sort_by = 'created_at'
+            
+            valid_sort_orders = ['asc', 'desc']
+            if sort_order not in valid_sort_orders:
+                sort_order = 'desc'
+            
+            query_parts.append(f"ORDER BY {sort_by} {sort_order}")
+            
+            # Add pagination
+            offset = (page - 1) * limit
+            query_parts.append("LIMIT ? OFFSET ?")
+            params.extend([limit, offset])
+            
+            # Execute query for templates
+            cursor = await db.execute(" ".join(query_parts), params)
+            rows = await cursor.fetchall()
+            templates = [dict(row) for row in rows]
+            
+            # Parse tags from JSON string to list
+            for template in templates:
+                if template['tags']:
+                    try:
+                        template['tags'] = json.loads(template['tags'])
+                    except:
+                        template['tags'] = []
+            
+            # Get total count
+            count_query_parts = ["SELECT COUNT(*) FROM templates"]
+            if where_clauses:
+                count_query_parts.append("WHERE " + " AND ".join(where_clauses))
+            
+            count_cursor = await db.execute(" ".join(count_query_parts), params[:-2])  # Remove limit and offset
+            total_count = (await count_cursor.fetchone())[0]
+            
+            return {
+                'templates': templates,
+                'total': total_count,
+                'page': page,
+                'limit': limit,
+                'total_pages': (total_count + limit - 1) // limit
+            }
+    
+    async def get_template(self, template_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single template by ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute(
+                "SELECT id, title, description, image, tags, category, created_at, updated_at, prompt FROM templates WHERE id = ?",
+                (template_id,)
+            )
+            row = await cursor.fetchone()
+            
+            if row:
+                template = dict(row)
+                # Parse tags from JSON string to list
+                if template['tags']:
+                    try:
+                        template['tags'] = json.loads(template['tags'])
+                    except:
+                        template['tags'] = []
+                return template
+            return None
+    
+    async def create_template(self, title: str, description: str, image: str, tags: List[str], category: str = 'my-templates') -> Dict[str, Any]:
+        """Create a new template"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Convert tags list to JSON string
+            tags_json = json.dumps(tags)
+            
+            cursor = await db.execute(
+                "INSERT INTO templates (title, description, image, tags, category) VALUES (?, ?, ?, ?, ?)",
+                (title, description, image, tags_json, category)
+            )
+            await db.commit()
+            
+            # Get the newly created template
+            new_template_id = cursor.lastrowid
+            return await self.get_template(new_template_id)
+    
+    async def delete_template(self, template_id: int) -> bool:
+        """Delete a template by ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            result = await db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+            await db.commit()
+            return result.rowcount > 0
+    
+    async def update_template(self, template_id: int, title: str = None, description: str = None, image: str = None, tags: List[str] = None, category: str = None, prompt: str = None) -> Optional[Dict[str, Any]]:
+        """Update a template"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Check if template exists
+            existing_template = await self.get_template(template_id)
+            if not existing_template:
+                return None
+            
+            # Prepare update fields
+            update_fields = []
+            params = []
+            
+            if title is not None:
+                update_fields.append("title = ?")
+                params.append(title)
+            if description is not None:
+                update_fields.append("description = ?")
+                params.append(description)
+            if image is not None:
+                update_fields.append("image = ?")
+                params.append(image)
+            if tags is not None:
+                update_fields.append("tags = ?")
+                params.append(json.dumps(tags))
+            if category is not None:
+                update_fields.append("category = ?")
+                params.append(category)
+            if prompt is not None:
+                update_fields.append("prompt = ?")
+                params.append(prompt)
+            
+            # Always update the updated_at field
+            update_fields.append("updated_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')")
+            
+            # Add template_id to params
+            params.append(template_id)
+            
+            # Execute update
+            await db.execute(
+                f"UPDATE templates SET {', '.join(update_fields)} WHERE id = ?",
+                params
+            )
+            await db.commit()
+            
+            # Return the updated template
+            return await self.get_template(template_id)
+
 # Create a singleton instance
 db_service = DatabaseService()

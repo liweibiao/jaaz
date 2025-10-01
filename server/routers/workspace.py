@@ -352,7 +352,7 @@ def get_file_type(file_path: str) -> str:
     else:
         return "file"
 
-@router.get("/serve_file")
+@router.get("/file")
 async def serve_file(file_path: str):
     """
     提供文件内容服务，用于在浏览器中预览图片和视频

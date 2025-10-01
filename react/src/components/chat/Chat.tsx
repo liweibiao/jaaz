@@ -529,8 +529,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setInitCanvas(false)
     }
 
+    // 检查localStorage中是否有模板数据
+    setTimeout(() => {
+      const storedData = localStorage.getItem('templateData')
+      if (storedData) {
+        try {
+          const templateData = JSON.parse(storedData)
+          // 通过eventBus发送模板数据到聊天输入框
+          eventBus.emit('Template::SendToChat', templateData)
+          // 清理localStorage
+          localStorage.removeItem('templateData')
+        } catch (error) {
+          console.error('Failed to parse template data:', error)
+          // 出错时也要清理localStorage，避免重复尝试
+          localStorage.removeItem('templateData')
+        }
+      }
+    }, 300)
+
     scrollToBottom()
-  }, [sessionId, scrollToBottom, setInitCanvas])
+  }, [sessionId, scrollToBottom, setInitCanvas, eventBus])
 
   useEffect(() => {
     initChat()

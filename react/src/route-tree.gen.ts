@@ -14,8 +14,10 @@ import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as AssetsRouteImport } from './routes/assets'
 import { Route as Agent_studioRouteImport } from './routes/agent_studio'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TemplateManageRouteImport } from './routes/template.manage'
 import { Route as TemplateUseTemplateIdRouteImport } from './routes/template-use.$templateId'
 import { Route as CanvasIdRouteImport } from './routes/canvas.$id'
+import { Route as TemplateMyCreateRouteImport } from './routes/template.my.create'
 
 const TemplatesRoute = TemplatesRouteImport.update({
   id: '/templates',
@@ -42,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplateManageRoute = TemplateManageRouteImport.update({
+  id: '/template/manage',
+  path: '/template/manage',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TemplateUseTemplateIdRoute = TemplateUseTemplateIdRouteImport.update({
   id: '/template-use/$templateId',
   path: '/template-use/$templateId',
@@ -50,6 +57,11 @@ const TemplateUseTemplateIdRoute = TemplateUseTemplateIdRouteImport.update({
 const CanvasIdRoute = CanvasIdRouteImport.update({
   id: '/canvas/$id',
   path: '/canvas/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplateMyCreateRoute = TemplateMyCreateRouteImport.update({
+  id: '/template/my/create',
+  path: '/template/my/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -61,6 +73,8 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRoute
   '/canvas/$id': typeof CanvasIdRoute
   '/template-use/$templateId': typeof TemplateUseTemplateIdRoute
+  '/template/manage': typeof TemplateManageRoute
+  '/template/my/create': typeof TemplateMyCreateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +84,8 @@ export interface FileRoutesByTo {
   '/templates': typeof TemplatesRoute
   '/canvas/$id': typeof CanvasIdRoute
   '/template-use/$templateId': typeof TemplateUseTemplateIdRoute
+  '/template/manage': typeof TemplateManageRoute
+  '/template/my/create': typeof TemplateMyCreateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +96,8 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRoute
   '/canvas/$id': typeof CanvasIdRoute
   '/template-use/$templateId': typeof TemplateUseTemplateIdRoute
+  '/template/manage': typeof TemplateManageRoute
+  '/template/my/create': typeof TemplateMyCreateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +109,8 @@ export interface FileRouteTypes {
     | '/templates'
     | '/canvas/$id'
     | '/template-use/$templateId'
+    | '/template/manage'
+    | '/template/my/create'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +120,8 @@ export interface FileRouteTypes {
     | '/templates'
     | '/canvas/$id'
     | '/template-use/$templateId'
+    | '/template/manage'
+    | '/template/my/create'
   id:
     | '__root__'
     | '/'
@@ -109,6 +131,8 @@ export interface FileRouteTypes {
     | '/templates'
     | '/canvas/$id'
     | '/template-use/$templateId'
+    | '/template/manage'
+    | '/template/my/create'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +143,8 @@ export interface RootRouteChildren {
   TemplatesRoute: typeof TemplatesRoute
   CanvasIdRoute: typeof CanvasIdRoute
   TemplateUseTemplateIdRoute: typeof TemplateUseTemplateIdRoute
+  TemplateManageRoute: typeof TemplateManageRoute
+  TemplateMyCreateRoute: typeof TemplateMyCreateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -158,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/template/manage': {
+      id: '/template/manage'
+      path: '/template/manage'
+      fullPath: '/template/manage'
+      preLoaderRoute: typeof TemplateManageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/template-use/$templateId': {
       id: '/template-use/$templateId'
       path: '/template-use/$templateId'
@@ -172,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CanvasIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/template/my/create': {
+      id: '/template/my/create'
+      path: '/template/my/create'
+      fullPath: '/template/my/create'
+      preLoaderRoute: typeof TemplateMyCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +223,8 @@ const rootRouteChildren: RootRouteChildren = {
   TemplatesRoute: TemplatesRoute,
   CanvasIdRoute: CanvasIdRoute,
   TemplateUseTemplateIdRoute: TemplateUseTemplateIdRoute,
+  TemplateManageRoute: TemplateManageRoute,
+  TemplateMyCreateRoute: TemplateMyCreateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -136,11 +136,23 @@ const TemplateUsePage: React.FC = () => {
         }))
       }
       
-      // 发送事件到聊天窗口
-      eventBus.emit('Template::SendToChat', chatData)
+      // 存储到localStorage，确保页面加载后能获取到数据
+      localStorage.setItem('templateData', JSON.stringify(chatData))
       
-      // 导航到首页而不是不存在的画布页面
+      // 导航到首页
       router.navigate({ to: '/' })
+      
+      // 使用setTimeout确保页面加载后再发送事件
+      setTimeout(() => {
+        // 从localStorage读取数据并发送事件
+        const storedData = localStorage.getItem('templateData')
+        if (storedData) {
+          const data = JSON.parse(storedData)
+          eventBus.emit('Template::SendToChat', data)
+          // 清理localStorage
+          localStorage.removeItem('templateData')
+        }
+      }, 500)
     } catch (err) {
       setError(t('templates:createError', '创建项目失败'))
       console.error('Failed to send to chat:', err)
