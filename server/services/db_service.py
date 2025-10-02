@@ -162,8 +162,31 @@ class DatabaseService:
     async def delete_canvas(self, id: str):
         """Delete canvas and related data"""
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("DELETE FROM canvases WHERE id = ?", (id,))
-            await db.commit()
+            # 开始事务
+            await db.execute("BEGIN TRANSACTION;")
+            try:
+                # 1. 获取所有相关的会话
+                cursor = await db.execute("SELECT id FROM chat_sessions WHERE canvas_id = ?", (id,))
+                sessions = await cursor.fetchall()
+                
+                # 2. 删除每个会话的所有消息
+                for session in sessions:
+                    session_id = session[0]
+                    await db.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
+                
+                # 3. 删除所有相关的会话
+                await db.execute("DELETE FROM chat_sessions WHERE canvas_id = ?", (id,))
+                
+                # 4. 最后删除canvas本身
+                await db.execute("DELETE FROM canvases WHERE id = ?", (id,))
+                
+                # 提交事务
+                await db.commit()
+            except Exception as e:
+                # 发生错误时回滚事务
+                await db.rollback()
+                print(f"Failed to delete canvas and related data: {e}")
+                raise
 
     async def rename_canvas(self, id: str, name: str):
         """Rename canvas"""

@@ -40,17 +40,29 @@ export const PROVIDER_NAME_MAPPING: {
     name: 'ComfyUI',
     icon: 'https://framerusercontent.com/images/3cNQMWKzIhIrQ5KErBm7dSmbd2w.png',
   },
+  google: {
+    name: 'Google',
+    icon: 'https://www.gstatic.com/aistudio/ai_studio_favicon_2_32x32.png',
+  },
+  doubao: {
+    name: 'Doubao',
+    icon: `${BASE_API_URL}/static/llm_icon/doubao.png`,
+  },
+  googlevertex: {
+    name: 'Vertex',
+    icon: 'https://images.seeklogo.com/logo-png/52/1/vertex-ai-logo-png_seeklogo-523075.png',
+  },
 }
 
 // Tool call name mapping
 export const TOOL_CALL_NAME_MAPPING: { [key in ToolCallFunctionName]: string } =
-  {
-    generate_image: 'Generate Image',
-    prompt_user_multi_choice: 'Prompt Multi-Choice',
-    prompt_user_single_choice: 'Prompt Single-Choice',
-    write_plan: 'Write Plan',
-    finish: 'Finish',
-  }
+{
+  generate_image: 'Generate Image',
+  prompt_user_multi_choice: 'Prompt Multi-Choice',
+  prompt_user_single_choice: 'Prompt Single-Choice',
+  write_plan: 'Write Plan',
+  finish: 'Finish',
+}
 
 export const LOGO_URL = 'https://jaaz.app/favicon.ico'
 

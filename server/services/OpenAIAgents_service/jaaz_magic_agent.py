@@ -11,6 +11,7 @@ from common import DEFAULT_PORT
 from ..jaaz_service import JaazService
 from utils.image_analyser import ImageAnalyser
 from ..magic_task_interface import create_and_execute_magic_task
+from utils.error_handler import clean_error_message
 
 
 async def create_jaaz_response(messages: List[Dict[str, Any]], session_id: str = "", canvas_id: str = "", text_model: Dict[str, Any] = None, selected_tools: List[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -78,13 +79,14 @@ async def create_jaaz_response(messages: List[Dict[str, Any]], session_id: str =
             # 不再自动回退到JaazService，避免产生官方任务ID和扣费
             print(f"⚠️ MagicTask接口执行失败: {str(e)}")
             
-            # 直接返回错误信息，不回退到官方服务
+            # 直接返回错误信息，不回退到官方服务，使用clean_error_message清理错误内容
+            clean_error = clean_error_message(e)
             return {
                 'role': 'assistant',
                 'content': [
                     {
                         'type': 'text',
-                        'text': f'✨ Magic Generation Error: {str(e)}'
+                        'text': f'✨ Magic Generation Error: {clean_error}'
                     }
                 ]
             }
@@ -93,12 +95,14 @@ async def create_jaaz_response(messages: List[Dict[str, Any]], session_id: str =
         if result.get('error'):
             error_msg = result['error']
             print(f"❌ Magic generation error: {error_msg}")
+            # 使用clean_error_message清理错误内容
+            clean_error = clean_error_message(error_msg)
             return {
                 'role': 'assistant',
                 'content': [
                     {
                         'type': 'text',
-                        'text': f'✨ Magic Generation Error: {error_msg}'
+                        'text': f'✨ Magic Generation Error: {clean_error}'
                     }
                 ]
             }
@@ -175,12 +179,14 @@ async def create_jaaz_response(messages: List[Dict[str, Any]], session_id: str =
             }
         else:
             print(f"❌ 创建魔法回复时出错: {e}")
+            # 使用clean_error_message清理错误内容
+            clean_error = clean_error_message(e)
             return {
                 'role': 'assistant',
                 'content': [
                     {
                         'type': 'text',
-                        'text': f'✨ Magic Generation Error: {str(e)}'
+                        'text': f'✨ Magic Generation Error: {clean_error}'
                     }
                 ]
             }

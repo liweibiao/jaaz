@@ -11,6 +11,7 @@ from services.websocket_service import send_to_websocket  # type: ignore
 from services.config_service import config_service
 from typing import Optional, List, Dict, Any, cast, Set, TypedDict
 from models.config_model import ModelInfo
+from utils.error_handler import clean_error_message
 
 
 class ContextInfo(TypedDict):
@@ -174,7 +175,13 @@ async def _handle_error(error: Exception, session_id: str) -> None:
     print(f"Full traceback:\n{tb_str}")
     traceback.print_exc()
 
+    # 使用错误处理工具清理错误消息
+    clean_error = clean_error_message(error)
+    
+    # 记录清理后的错误消息
+    print(f"清理后的错误消息: {clean_error}")
+
     await send_to_websocket(session_id, cast(Dict[str, Any], {
         'type': 'error',
-        'error': str(error)
+        'error': clean_error
     }))

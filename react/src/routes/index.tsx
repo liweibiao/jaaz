@@ -2,6 +2,7 @@ import { createCanvas } from '@/api/canvas'
 import ChatTextarea from '@/components/chat/ChatTextarea'
 import CanvasList from '@/components/home/CanvasList'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
 import { useConfigs } from '@/contexts/configs'
 import { DEFAULT_SYSTEM_PROMPT } from '@/constants'
 import { useMutation } from '@tanstack/react-query'
@@ -74,10 +75,41 @@ function Home() {
                 text_model: configs.textModel,
                 tool_list: configs.toolList,
                 system_prompt: localStorage.getItem('system_prompt') || DEFAULT_SYSTEM_PROMPT,
+                original_canvas_id: undefined, // 明确设置为undefined，确保不会复制当前画布内容
               })
             }}
             pending={isPending}
           />
+
+          <div className='mt-6 flex justify-center'>
+            <Button
+              variant="default"
+              size="default"
+              className="rounded-full"
+              onClick={() => {
+                // 确保text_model有有效的默认值，避免API密钥错误
+                const defaultTextModel = {
+                  provider: 'jaaz',  // 使用jaaz作为默认提供商
+                  model: 'gpt-4o',   // 使用gpt-4o作为默认模型
+                  url: 'https://jaaz.app/api/v1/' // 默认API URL
+                };
+                
+                createCanvasMutation({
+                  name: t('home:newProject'),
+                  canvas_id: nanoid(),
+                  messages: [],
+                  session_id: nanoid(),
+                  original_canvas_id: undefined, // 明确设置为undefined，确保不会复制当前画布内容
+                  text_model: defaultTextModel,
+                  tool_list: [],
+                  system_prompt: localStorage.getItem('system_prompt') || DEFAULT_SYSTEM_PROMPT,
+                })
+              }}
+              disabled={isPending}
+            >
+              {t('home:newProject')}
+            </Button>
+          </div>
         </div>
 
         <CanvasList />

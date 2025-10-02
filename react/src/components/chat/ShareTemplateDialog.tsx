@@ -139,7 +139,9 @@ export default function ShareTemplateDialog({
 
       if (!response.ok) {
         console.error("Failed to create template", response)
-        throw new Error(`Failed to create template ${response}`)
+        // 获取错误文本而不是直接拼接response对象
+        const errorText = await response.text()
+        throw new Error(`Failed to create template: ${errorText.substring(0, 200)}...`) // 限制错误消息长度
       }
 
       const result = await response.json()

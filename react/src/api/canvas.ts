@@ -25,15 +25,26 @@ export async function createCanvas(data: {
     url: string
   }
   tool_list: ToolInfo[]
-
   system_prompt: string
+  original_canvas_id?: string
 }): Promise<{ id: string }> {
   const response = await fetch('/api/canvas/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  return await response.json()
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `创建项目失败，请稍后再试 (状态码: ${response.status})`);
+  }
+  
+  const result = await response.json();
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  
+  return result;
 }
 
 export async function getCanvas(

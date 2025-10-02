@@ -80,7 +80,7 @@ const CanvasExcali: React.FC<CanvasExcaliProps> = ({
       appState: AppState,
       files: BinaryFiles
     ) => {
-      if (elements.length === 0 || !appState) {
+      if (!appState) {
         return
       }
 
@@ -104,6 +104,8 @@ const CanvasExcali: React.FC<CanvasExcaliProps> = ({
         }
       }
 
+      // Always save the canvas, even if there are no elements
+      // This prevents content from being copied to new projects when exiting directly
       saveCanvas(canvasId, { data, thumbnail })
     },
     1000

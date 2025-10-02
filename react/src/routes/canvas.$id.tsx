@@ -1,4 +1,3 @@
-import { getCanvas, renameCanvas } from '@/api/canvas'
 import CanvasExcali from '@/components/canvas/CanvasExcali'
 import CanvasHeader from '@/components/canvas/CanvasHeader'
 import CanvasMenu from '@/components/canvas/menu'
@@ -11,6 +10,7 @@ import { Session } from '@/types/types'
 import { createFileRoute, useParams, useSearch } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { getCanvas, renameCanvas } from '@/api/canvas'
 
 export const Route = createFileRoute('/canvas/$id')({
   component: Canvas,
@@ -37,10 +37,14 @@ function Canvas() {
         setError(null)
         const data = await getCanvas(id)
         if (mounted) {
-          setCanvas(data)
-          setCanvasName(data.name)
-          setSessionList(data.sessions)
-          // Video elements now handled by native Excalidraw embeddable elements
+          if (data) {
+            setCanvas(data)
+            setCanvasName(data.name || 'Untitled Canvas')
+            setSessionList(data.sessions || [])
+            // Video elements now handled by native Excalidraw embeddable elements
+          } else {
+            setError(new Error('Canvas data not found'))
+          }
         }
       } catch (err) {
         if (mounted) {

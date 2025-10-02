@@ -5,6 +5,7 @@ import aiohttp
 from typing import Dict, Any, Optional, List
 from utils.http_client import HttpClient
 from services.config_service import config_service
+from utils.error_handler import handle_async_api_error
 
 
 class JaazService:
@@ -82,9 +83,8 @@ class JaazService:
                             print("❌ No task_id in response")
                             return ""
                     else:
-                        error_text = await response.text()
-                        print(
-                            f"❌ Failed to create magic task: {response.status} - {error_text}")
+                        clean_error = await handle_async_api_error(response, "创建魔法任务失败")
+                        print(f"❌ {clean_error}")
                         return ""
 
         except Exception as e:
@@ -147,8 +147,8 @@ class JaazService:
                     else:
                         raise Exception("No task_id in response")
                 else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to create video task: HTTP {response.status} - {error_text}")
+                        clean_error = await handle_async_api_error(response, "创建视频任务失败")
+                        raise Exception(clean_error)
 
     async def poll_for_task_completion(
         self,
@@ -357,8 +357,8 @@ class JaazService:
                     if not task_id:
                         raise Exception("No task_id in response")
                 else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to create Seedance video task: HTTP {response.status} - {error_text}")
+                        clean_error = await handle_async_api_error(response, "创建Seedance视频任务失败")
+                        raise Exception(clean_error)
 
         print(f"✅ Seedance video task created: {task_id}")
 
@@ -419,8 +419,8 @@ class JaazService:
                     else:
                         raise Exception("No task_id in response")
                 else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to create Midjourney task: HTTP {response.status} - {error_text}")
+                        clean_error = await handle_async_api_error(response, "创建Midjourney任务失败")
+                        raise Exception(clean_error)
 
     async def generate_image_by_midjourney(
         self,

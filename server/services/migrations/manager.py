@@ -3,7 +3,6 @@ import sqlite3
 from services.migrations.v1_initial_schema import V1InitialSchema
 from services.migrations.v2_add_canvases import V2AddCanvases
 from services.migrations.v3_add_comfy_workflow import V3AddComfyWorkflow
-from services.migrations.v4_add_templates import V4AddTemplates
 from . import Migration
 
 # Database version
@@ -21,10 +20,6 @@ ALL_MIGRATIONS = [
     {
         'version': 3,
         'migration': V3AddComfyWorkflow,
-    },
-    {
-        'version': 4,
-        'migration': V4AddTemplates,
     },
 ]
 class MigrationManager:
