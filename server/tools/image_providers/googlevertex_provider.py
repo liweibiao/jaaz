@@ -8,7 +8,7 @@ from ..utils.image_utils import get_image_info_and_save, generate_image_id
 from services.config_service import config_service
 import base64
 import json
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 
 
 class GoogleVertexImageProvider(ImageProviderBase):
@@ -103,7 +103,7 @@ class GoogleVertexImageProvider(ImageProviderBase):
                 }
 
             # Send request to Google Vertex API
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="googlevertex") as session:
                 async with session.post(api_endpoint, json=payload) as response:
                     if response.status != 200:
                         error_message = await response.text()

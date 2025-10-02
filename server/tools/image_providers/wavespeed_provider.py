@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from .image_base_provider import ImageProviderBase
 from ..utils.image_utils import get_image_info_and_save, generate_image_id
 from services.config_service import FILES_DIR, config_service
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 
 
 class WavespeedResponse(BaseModel):
@@ -69,7 +69,7 @@ class WavespeedProvider(ImageProviderBase):
 
     async def _poll_for_result(self, result_url: str, headers: dict[str, str]) -> str:
         """Poll for image generation result"""
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="wavespeed") as session:
             for _ in range(60):  # 最多等60秒
                 await asyncio.sleep(1)
                 async with session.get(result_url, headers=headers) as result_resp:
@@ -117,7 +117,7 @@ class WavespeedProvider(ImageProviderBase):
 
             endpoint = f"{self.api_url.rstrip('/')}/{request_model}"
 
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="wavespeed") as session:
                 async with session.post(endpoint, json=payload, headers=headers) as response:
                     response_json = await response.json()
 

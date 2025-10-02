@@ -6,7 +6,7 @@ import base64
 import json
 from typing import Any, Optional, Tuple
 from nanoid import generate
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 from services.config_service import FILES_DIR
 
 
@@ -52,7 +52,7 @@ async def get_image_info_and_save(
         else:
             # Fetch the image asynchronously
             print(f"尝试从URL获取图片: {url}")
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="default") as session:
                 async with session.get(url) as response:
                     # 检查响应状态
                     if response.status != 200:

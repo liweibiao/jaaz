@@ -42,6 +42,7 @@ import { useConfigs } from '@/contexts/configs'
 import 'react-photo-view/dist/react-photo-view.css'
 import { DEFAULT_SYSTEM_PROMPT } from '@/constants'
 import { ModelInfo, ToolInfo } from '@/api/model'
+import { cancelChat } from '@/api/chat'
 import { Share2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
@@ -578,36 +579,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }
 
   const onSendMessages = useCallback(
-    (data: Message[], configs: { textModel: Model; toolList: ToolInfo[] }) => {
+    async (data: Message[], configs: { textModel: Model; toolList: ToolInfo[] }) => {
       setPending('text')
       setMessages(data)
 
-      sendMessages({
-        sessionId: sessionId!,
-        canvasId: canvasId,
-        newMessages: data,
-        textModel: configs.textModel,
-        toolList: configs.toolList,
-        systemPrompt:
-          localStorage.getItem('system_prompt') || DEFAULT_SYSTEM_PROMPT,
-      })
+      try {
+        await sendMessages({
+          sessionId: sessionId!,
+          canvasId: canvasId,
+          newMessages: data,
+          textModel: configs.textModel,
+          toolList: configs.toolList,
+          systemPrompt:
+            localStorage.getItem('system_prompt') || DEFAULT_SYSTEM_PROMPT,
+        })
 
-      if (searchSessionId !== sessionId) {
-        window.history.pushState(
-          {},
-          '',
-          `/canvas/${canvasId}?sessionId=${sessionId}`
-        )
+        if (searchSessionId !== sessionId) {
+          window.history.pushState(
+            {},
+            '',
+            `/canvas/${canvasId}?sessionId=${sessionId}`
+          )
+        }
+
+        scrollToBottom()
+      } catch (error) {
+        console.error('Failed to send messages:', error)
+        // 在API调用失败时重置pending状态
+        setPending(false)
+        // 显示错误提示
+        toast.error('发送消息失败，请重试', {
+          description: error instanceof Error ? error.message : '未知错误'
+        })
       }
-
-      scrollToBottom()
     },
     [canvasId, sessionId, searchSessionId, scrollToBottom]
   )
 
-  const handleCancelChat = useCallback(() => {
-    setPending(false)
-  }, [])
+  const handleCancelChat = useCallback(async () => {
+    try {
+      // 调用API取消后端的聊天请求
+      if (sessionId) {
+        await cancelChat(sessionId)
+      }
+      // 重置前端的pending状态
+      setPending(false)
+    } catch (error) {
+      console.error('Failed to cancel chat:', error)
+      // 即使API调用失败，也要重置前端的pending状态
+      setPending(false)
+      // 显示错误提示
+      toast.error('取消聊天失败', {
+        description: error instanceof Error ? error.message : '未知错误'
+      })
+    }
+  }, [sessionId])
 
   const handleMessageClick = useCallback((message: Message, index: number, e?: React.MouseEvent) => {
     // 防止事件冒泡影响其他交互

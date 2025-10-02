@@ -5,6 +5,7 @@ import { memo } from 'react'
 import { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import CanvasMagicGenerator from './CanvasMagicGenerator'
 import CanvasPopbar from './CanvasPopbar'
+import CanvasImageReplacer from './CanvasImageReplacer'
 
 type CanvasPopbarContainerProps = {
     pos: { x: number; y: number }
@@ -41,9 +42,10 @@ const CanvasPopbarContainer = ({
                 {showMagicGenerate && (
                     <CanvasMagicGenerator selectedImages={selectedImages} selectedElements={selectedElements} />
                 )}
+                <CanvasImageReplacer selectedImages={selectedImages} selectedElements={selectedElements} />
             </div>
         </motion.div>
     )
 }
 
-export default memo(CanvasPopbarContainer) 
+export default memo(CanvasPopbarContainer)

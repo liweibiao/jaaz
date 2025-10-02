@@ -3,7 +3,7 @@ from services.db_service import db_service
 from .StreamProcessor import StreamProcessor
 from .agent_manager import AgentManager
 import traceback
-from utils.http_client import HttpClient
+from utils.http_client import HttpClient, get_http_client
 from langgraph_swarm import create_swarm  # type: ignore
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -154,8 +154,8 @@ def _create_text_model(text_model: ModelInfo) -> Any:
         )
     else:
         # Create httpx client with SSL configuration for ChatOpenAI
-        http_client = HttpClient.create_sync_client()
-        http_async_client = HttpClient.create_async_client()
+        http_client = get_http_client().create_httpx_client(provider_key=provider)
+        http_async_client = get_http_client().create_async_httpx_client(provider_key=provider)
         return ChatOpenAI(
             model=model,
             api_key=api_key,  # type: ignore

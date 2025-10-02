@@ -1,5 +1,5 @@
 from ..magic_task_interface import MagicTaskInterface
-from server.utils.http_client import HttpClient
+from server.utils.http_client import get_http_client
 from ..config_service import config_service
 import asyncio
 import aiohttp
@@ -112,7 +112,7 @@ class GeminiMagicTask(MagicTaskInterface):
             
             while retry_count <= max_retries:
                 try:
-                    async with HttpClient.create_aiohttp() as session:
+                    async with get_http_client().create_aiohttp_client_session(provider_key="gemini") as session:
                         async with session.post(
                             url,
                             headers=self._build_headers(),
@@ -314,7 +314,7 @@ class GeminiMagicTask(MagicTaskInterface):
             
             while retry_count <= max_retries:
                 try:
-                    async with HttpClient.create_aiohttp() as session:
+                    async with get_http_client().create_aiohttp_client_session(provider_key="gemini") as session:
                         async with session.post(
                             url,
                             headers=self._build_headers(),

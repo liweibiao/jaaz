@@ -1,7 +1,7 @@
 import json
 from typing import Dict, Any, Optional
 from services.config_service import config_service
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 from tools.utils.image_generation_core import IMAGE_PROVIDERS
 
 
@@ -97,7 +97,7 @@ class ImageAnalyser:
             }
             
             # 发送请求
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="openai") as session:
                 headers = {"Authorization": f"Bearer {api_key}"}
                 async with session.post(
                     f"{base_url}/chat/completions",
@@ -137,7 +137,7 @@ class ImageAnalyser:
             }
             
             # 发送请求
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
                 headers = {
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"

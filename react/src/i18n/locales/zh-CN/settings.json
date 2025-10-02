@@ -106,5 +106,25 @@
   },
   "saveSettings": "保存设置",
   "close": "关闭",
-  "cancel": "取消"
+  "cancel": "取消",
+  "googleOAuth": {
+    "title": "Google OAuth 认证",
+    "description": "配置 Google 服务的 OAuth 认证参数，用于 gemini-2.5-flash-image-preview 等模型",
+    "enable": "启用 Google OAuth",
+    "enableDescription": "开启后可以使用需要 OAuth 认证的 Google 服务",
+    "apiUrlInfo": "Google Vertex API 地址提示",
+    "apiUrlExample": "对于 googlevertex 提供商，URL 应填写基础接口地址： https://generativelanguage.googleapis.com",
+    "clientId": "客户端 ID",
+    "clientIdTooltip": "Google Cloud 平台创建的 OAuth 客户端 ID",
+    "clientIdPlaceholder": "输入客户端 ID",
+    "clientSecret": "客户端密钥",
+    "clientSecretTooltip": "Google Cloud 平台创建的 OAuth 客户端密钥",
+    "clientSecretPlaceholder": "输入客户端密钥",
+    "jwtSecret": "JWT 密钥",
+    "jwtSecretTooltip": "用于签名 JWT 令牌的密钥，建议使用随机生成的安全密钥",
+    "jwtSecretPlaceholder": "输入 JWT 密钥",
+    "generateJwtSecret": "生成随机密钥",
+    "jwtSecretGenerated": "JWT 密钥已成功生成",
+    "missingFields": "请填写所有必要的认证参数",
+    "loadError": "加载 Google OAuth 配置失败"}
 }

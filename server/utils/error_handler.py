@@ -18,8 +18,9 @@ def clean_error_message(error_msg: str) -> str:
     # 转换为字符串
     error_str = str(error_msg)
     
-    # 检查是否包含HTML标签
-    if '<html' in error_str.lower() or '<!doctype' in error_str.lower():
+    # 检查是否包含HTML标签 - 增强检测逻辑
+    html_patterns = ['<html', '<!doctype', '<body', '<head', '<title', '<div', '<p', '</html>']
+    if any(pattern in error_str.lower() for pattern in html_patterns) or (error_str.startswith('<') and error_str.endswith('>')):
         # 如果是HTML内容，返回通用错误消息
         return "网络请求失败，请稍后再试"
     

@@ -3,7 +3,7 @@
 import asyncio
 import aiohttp
 from typing import Dict, Any, Optional, List
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 from services.config_service import config_service
 from utils.error_handler import handle_async_api_error
 
@@ -66,7 +66,7 @@ class JaazService:
                 request_body["intent"] = image_intent
                 print(f"📝 添加图片意图到请求: {image_intent[:50]}...")
 
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
                 async with session.post(
                     f"{self.api_url}/image/magic",
                     headers=self._build_headers(),
@@ -119,7 +119,7 @@ class JaazService:
         Raises:
             Exception: 当任务创建失败时抛出异常
         """
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
             payload = {
                 "prompt": prompt,
                 "model": model,
@@ -173,7 +173,7 @@ class JaazService:
         max_attempts = max_attempts or 150  # 默认最多轮询 150 次
         interval = interval or 2.0  # 默认轮询间隔 2 秒
 
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
             for _ in range(max_attempts):
                 async with session.get(
                     f"{self.api_url}/task/{task_id}",
@@ -332,7 +332,7 @@ class JaazService:
             Exception: 当视频生成失败时抛出异常
         """
         # 1. 创建 Seedance 视频生成任务
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
             payload = {
                 "prompt": prompt,
                 "model": model,
@@ -397,7 +397,7 @@ class JaazService:
         Raises:
             Exception: 当任务创建失败时抛出异常
         """
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
             payload = {
                 "prompt": prompt,
                 "model": model,

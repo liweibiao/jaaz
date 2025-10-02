@@ -4,7 +4,7 @@ from typing import Optional, Any
 from .image_base_provider import ImageProviderBase
 from ..utils.image_utils import get_image_info_and_save, generate_image_id
 from services.config_service import FILES_DIR
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 from services.config_service import config_service
 
 
@@ -35,7 +35,7 @@ class ReplicateImageProvider(ImageProviderBase):
         Returns:
             dict[str, Any]: Response data from Replicate API
         """
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="replicate") as session:
             print(
                 f'🦄 Replicate API request: {url}, model: {data["input"]["prompt"]}')
             async with session.post(url, headers=headers, json=data) as response:

@@ -10,10 +10,10 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
-import { PlugZap, Network, ChevronLeft } from 'lucide-react'
+import { PlugZap, Network, Globe, ChevronLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export type SettingSidebarType = 'provider' | 'proxy'
+export type SettingSidebarType = 'provider' | 'proxy' | 'googleOAuth'
 
 type SettingSidebar = {
   current: SettingSidebarType
@@ -43,6 +43,11 @@ const SettingSidebar: React.FC<SettingSidebar> = ({
       type: 'proxy',
       title: 'settings:proxy:title',
       icon: Network,
+    },
+    {
+      type: 'googleOAuth',
+      title: 'settings:googleOAuth:title',
+      icon: Globe,
     },
   ]
 

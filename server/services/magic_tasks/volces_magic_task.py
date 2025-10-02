@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional
 from ..magic_task_interface import MagicTaskInterface
-from server.utils.http_client import HttpClient
+from server.utils.http_client import get_http_client
 from ..config_service import config_service
 import asyncio
 import aiohttp
@@ -94,7 +94,7 @@ class VolcesMagicTask(MagicTaskInterface):
             
             while retry_count <= max_retries:
                 try:
-                    async with HttpClient.create_aiohttp() as session:
+                    async with get_http_client().create_aiohttp_client_session(provider_key="volces") as session:
                         async with session.post(
                             url,
                             headers=self._build_headers(),
@@ -223,7 +223,7 @@ class VolcesMagicTask(MagicTaskInterface):
             print(f"🔗 Volces图像分析API URL: {url}")
             
             # 发送HTTP请求到Volces API
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="volces") as session:
                 async with session.post(
                     url,
                     headers=self._build_headers(),

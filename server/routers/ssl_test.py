@@ -12,13 +12,14 @@ SSL配置测试路由模块
 注意：此模块仅用于诊断和测试目的，不应在生产环境中频繁调用。
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 import traceback
 import asyncio
 import ssl
 import sys
 import os
-from utils.http_client import HttpClient
+from typing import Dict, Any
+from utils.http_client import get_http_client
 
 router = APIRouter(prefix="/api")
 
@@ -26,8 +27,8 @@ router = APIRouter(prefix="/api")
 async def quick_ssl_test():
     """Quick SSL test for API endpoint"""
     try:
-        async with HttpClient.create() as client:
-            response = await client.get('https://httpbin.org/get', timeout=5)
+        async with get_http_client().create_aiohttp_client_session() as session:
+            response = await session.get('https://httpbin.org/get', timeout=5)
             return {
                 'ssl_working': response.status_code == 200,
                 'status_code': response.status_code,
@@ -114,7 +115,7 @@ async def test_ssl_configuration():
 
     # Test 2.5: httpx client creation for ChatOpenAI
     try:
-        httpx_client = HttpClient.create_sync_client()
+        httpx_client = get_http_client().create_httpx_client()
 
         # Get SSL verification info safely
         verify_info = "SSL context configured"
@@ -153,8 +154,8 @@ async def test_ssl_configuration():
         https_ok = False
         for url in test_urls:
             try:
-                async with HttpClient.create() as client:
-                    response = await client.get(url, timeout=10)
+                async with get_http_client().create_aiohttp_client_session() as session:
+                    response = await session.get(url, timeout=10)
                     success = response.status_code in [200, 301, 302]
                     log_result(
                         f"HTTPS Test ({url})",
@@ -170,8 +171,8 @@ async def test_ssl_configuration():
 
         # Test 4: Replicate API connectivity
         try:
-            async with HttpClient.create() as client:
-                response = await client.get('https://api.replicate.com', timeout=15)
+            async with get_http_client().create_aiohttp_client_session() as session:
+                response = await session.get('https://api.replicate.com', timeout=15)
                 success = response.status_code in [200, 401, 403, 404]
                 log_result(
                     "Replicate API SSL",
@@ -188,7 +189,7 @@ async def test_ssl_configuration():
     # Test 5: Basic httpx connectivity test
     if httpx_ok:
         try:
-            with HttpClient.create_sync() as client:
+            with get_http_client().create_httpx_client() as client:
                 # Test basic HTTPS connection first
                 response = client.get('https://httpbin.org/get', timeout=10)
                 success = response.status_code == 200
@@ -321,4 +322,131 @@ async def ssl_status_endpoint():
         return {
             'overall_status': 'error',
             'error': str(e)
+        }
+
+
+@router.get("/api/ssl")
+async def test_ssl_connection(
+    url: str = Query(..., description="要测试的URL"),
+    timeout: int = Query(10, description="超时时间(秒)"),
+    verify_ssl: bool = Query(True, description="是否验证SSL证书")
+) -> Dict[str, Any]:
+    """
+    测试SSL连接是否正常
+    
+    Args:
+        url: 要测试的URL
+        timeout: 超时时间(秒)
+        verify_ssl: 是否验证SSL证书
+    
+    Returns:
+        测试结果
+    """
+    try:
+        start_time = time.time()
+        # 创建SSL上下文
+        ssl_context = None
+        if verify_ssl:
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            ssl_context.check_hostname = True
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
+        else:
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # 创建HTTP客户端
+        httpx_client = get_http_client().create_httpx_client(verify=ssl_context, timeout=timeout)
+        
+        with httpx_client:
+            response = httpx_client.get(url)
+            response.raise_for_status()
+            
+            # 获取SSL证书信息
+            cert_info = None
+            if response.http_version >= "HTTP/2":
+                # HTTP/2连接的证书信息可能无法通过这种方式获取
+                pass
+            elif hasattr(response, 'extensions') and 'http_version' in response.extensions:
+                # 尝试获取证书信息
+                try:
+                    # 这是一个简化的尝试，实际中获取证书信息可能需要更复杂的方法
+                    connection = httpx_client._transport._pool.connections[0]  # type: ignore
+                    if hasattr(connection, 'ssl_object'):
+                        cert = connection.ssl_object.getpeercert()
+                        cert_info = {
+                            "subject": dict(x[0] for x in cert.get('subject', [])),
+                            "issuer": dict(x[0] for x in cert.get('issuer', [])),
+                            "version": cert.get('version'),
+                            "notBefore": cert.get('notBefore'),
+                            "notAfter": cert.get('notAfter')
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to get certificate info: {e}")
+            
+            elapsed_time = time.time() - start_time
+            
+            return {
+                "success": True,
+                "status_code": response.status_code,
+                "url": url,
+                "http_version": response.http_version,
+                "headers": dict(response.headers),
+                "content_length": len(response.content),
+                "ssl_context": {
+                    "verify_mode": ssl_context.verify_mode,
+                    "check_hostname": ssl_context.check_hostname
+                },
+                "certificate_info": cert_info,
+                "elapsed_time": round(elapsed_time, 3)
+            }
+    except httpx.HTTPError as e:
+        elapsed_time = time.time() - start_time
+        return {
+            "success": False,
+            "url": url,
+            "error": str(e),
+            "ssl_context": {
+                "verify_mode": ssl_context.verify_mode if 'ssl_context' in locals() else None,
+                "check_hostname": ssl_context.check_hostname if 'ssl_context' in locals() else None
+            },
+            "elapsed_time": round(elapsed_time, 3)
+        }
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        return {
+            "success": False,
+            "url": url,
+            "error": str(e),
+            "elapsed_time": round(elapsed_time, 3)
+        }
+
+
+@router.get("/verify")
+def verify_ssl_config():
+    """
+    验证SSL配置
+    
+    Returns:
+        SSL配置信息
+    """
+    try:
+        # 获取CA证书路径
+        ca_cert_path = certifi.where()
+        
+        # 检查SSL上下文创建
+        ssl_context = ssl.create_default_context(cafile=ca_cert_path)
+        
+        return {
+            "success": True,
+            "ca_cert_path": ca_cert_path,
+            "ssl_context": {
+                "verify_mode": ssl_context.verify_mode,
+                "check_hostname": ssl_context.check_hostname
+            }
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
         }

@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional, Dict, Any, List
 
 from .video_base_provider import VideoProviderBase
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 from services.config_service import config_service
 
 
@@ -92,7 +92,7 @@ class VolcesVideoProvider(VideoProviderBase, provider_name="volces"):
         polling_url = f"{self.base_url}/contents/generations/tasks/{task_id}"
         status = "submitted"
 
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="volces") as session:
             while status not in ("succeeded", "failed", "cancelled"):
                 print(
                     f"🎥 Polling Volces generation {task_id}, current status: {status} ...")
@@ -159,7 +159,7 @@ class VolcesVideoProvider(VideoProviderBase, provider_name="volces"):
                 f"🎥 Starting Volces video generation")
 
             # Make API request to create task
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="volces") as session:
                 async with session.post(api_url, headers=headers, json=payload) as response:
                     if response.status != 200:
                         try:

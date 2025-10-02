@@ -7,7 +7,7 @@ from openai.types import Image
 from .image_base_provider import ImageProviderBase
 from ..utils.image_utils import get_image_info_and_save, generate_image_id
 from services.config_service import FILES_DIR
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 from services.config_service import config_service
 
 
@@ -83,7 +83,7 @@ class JaazImageProvider(ImageProviderBase):
                 "type": 'image',
             }
 
-            async with HttpClient.create_aiohttp() as session:
+            async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
                 async with session.post(url, headers=headers, json=search_data) as response:
                     if response.status != 200:
                         print(f'🦄 Task search failed: HTTP {response.status}')
@@ -193,7 +193,7 @@ class JaazImageProvider(ImageProviderBase):
         Returns:
             JaazImagesResponse: Jaaz compatible image response object
         """
-        async with HttpClient.create_aiohttp() as session:
+        async with get_http_client().create_aiohttp_client_session(provider_key="jaaz") as session:
             print(
                 f'🦄 Jaaz API request: {url}, model: {data["model"]}, prompt: {data["prompt"]}')
 

@@ -106,3 +106,10 @@ export type Model = {
   model: string
   url: string
 }
+
+export interface GoogleOAuthConfig {
+  clientId: string
+  clientSecret: string
+  jwtSecret: string
+  enabled: boolean
+}

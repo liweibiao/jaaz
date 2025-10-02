@@ -91,7 +91,7 @@ async def update_settings(request: Request):
         }
     """
     data = await request.json()
-    result = await settings_service.update_settings(data)
+    result = settings_service.update_settings(data)
     return result
 
 
@@ -225,7 +225,7 @@ async def update_proxy_settings(request: Request):
             detail="Invalid proxy value. Must be 'no_proxy', 'system', or a valid proxy URL")
 
     # 更新代理设置
-    result = await settings_service.update_settings({"proxy": proxy_value})
+    result = settings_service.update_settings({"proxy": proxy_value})
     return result
 
 

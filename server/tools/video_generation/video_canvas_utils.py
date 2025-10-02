@@ -13,7 +13,7 @@ from services.config_service import FILES_DIR
 from services.db_service import db_service
 from services.websocket_service import send_to_websocket, broadcast_session_update  # type: ignore
 from common import DEFAULT_PORT
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 import aiofiles
 import mimetypes
 from pymediainfo import MediaInfo
@@ -208,7 +208,7 @@ async def get_video_info_and_save(
     url: str, file_path_without_extension: str
 ) -> Tuple[str, int, int, str]:
     # Fetch the video asynchronously
-    async with HttpClient.create_aiohttp() as session:
+    async with get_http_client().create_aiohttp_client_session(provider_key="default") as session:
         async with session.get(url) as response:
             video_content = await response.read()
 

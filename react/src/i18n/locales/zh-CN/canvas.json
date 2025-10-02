@@ -59,5 +59,17 @@
   "modifiedTime": "修改时间",
   "dimensions": "尺寸",
   "filePath": "文件路径",
-  "pngMetadata": "PNG 元数据"
+  "pngMetadata": "PNG 元数据",
+  "loading": "正在加载画布...",
+  "newChat": "新对话",
+  "loadingFailed": "加载失败:",
+  "retry": "重试",
+  "newChatWithNumber": "新对话 {{number}}",
+  "uploader": {
+    "upload": "上传照片",
+    "noImageSelected": "未选择图片",
+    "invalidImageType": "无效的图片类型",
+    "imageReplaced": "图片替换成功",
+    "failedToReplaceImage": "图片替换失败"
+  }
 }

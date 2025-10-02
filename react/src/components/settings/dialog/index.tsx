@@ -8,8 +8,9 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import SettingProviders from './providers'
 import SettingProxy from './proxy'
+import GoogleOAuthSettings from './googleOAuth'
 import SettingSidebar, { SettingSidebarType } from './sidebar'
-import { X } from 'lucide-react'
+import { X, Globe } from 'lucide-react'
 
 const SettingsDialog = () => {
   const { showSettingsDialog: open, setShowSettingsDialog } = useConfigs()
@@ -20,6 +21,8 @@ const SettingsDialog = () => {
     switch (current) {
       case 'proxy':
         return <SettingProxy />
+      case 'googleOAuth':
+        return <GoogleOAuthSettings />
       case 'provider':
       default:
         return <SettingProviders />

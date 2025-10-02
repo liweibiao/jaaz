@@ -1,350 +1,286 @@
-"""
-Settings Service - 设置服务模块
-
-该模块负责管理应用程序的所有配置设置，包括：
-- 代理配置（proxy settings）
-- 系统提示词（system prompts）
-- 其他应用配置项
-
-主要功能：
-1. 读取和写入 JSON 格式的设置文件
-2. 提供默认设置配置
-3. 敏感信息掩码处理（如密码）
-4. 设置的合并和更新操作
-5. 全局设置状态管理
-
-文件结构：
-- DEFAULT_SETTINGS: 默认配置模板
-- SettingsService: 核心设置服务类
-- settings_service: 全局服务实例
-- app_settings: 全局设置缓存
-"""
-
-import os
-import traceback
 import json
+import os
+import logging
+from typing import Dict, Any, Optional
+from pathlib import Path
+from datetime import datetime
 
-# 用户数据目录路径，优先使用环境变量，否则使用默认路径
-USER_DATA_DIR = os.getenv("USER_DATA_DIR", os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "user_data"))
+logger = logging.getLogger(__name__)
 
-# 全局设置配置缓存，用于在应用运行时快速访问设置
-app_settings = {}
-
-# 默认设置配置模板
-# 定义了应用程序的基础配置结构和默认值
+# 定义默认设置
 DEFAULT_SETTINGS = {
-    "proxy": "system",  # 代理设置：'' (不使用代理), 'system' (使用系统代理), 或具体的代理URL地址
-    "enabled_knowledge": [],  # 启用的知识库ID列表（保持兼容性）
-    "enabled_knowledge_data": []  # 启用的知识库完整数据列表
+    "proxy": "system",  # no_proxy, system, or custom URL
+    "providerProxies": {},  # 提供商特定代理设置
+    "systemPrompt": "You are a helpful assistant.",
+    "temperature": 0.7,
+    "max_tokens": 2048,
+    "historyEnabled": True,
+    "theme": "auto",
+    "locale": "auto",
+    "timeout": 60,
+    "showStatusMessages": True,
+    "showWelcomeMessage": True,
+    "typingIndicator": True,
+    "darkMode": "auto",
+    "autoComplete": True,
+    "googleOAuth": {
+        "clientId": "",
+        "clientSecret": ""
+    },
+    "apiKeys": {
+        # API keys storage
+    },
+    "customProviders": {},
+    "recentChats": [],
+    "lastUsed": {
+        "model": "",
+        "provider": ""
+    },
+    "cacheEnabled": True,
+    "cacheTimeout": 3600,
+    "notificationSettings": {
+        "newMessage": True,
+        "systemUpdates": True,
+        "errorNotifications": True
+    },
+    "lastUpdated": datetime.now().isoformat()
 }
 
-
 class SettingsService:
-    """
-    设置服务类
+    """服务类，用于管理应用程序设置"""
 
-    负责管理应用程序的所有配置设置，包括读取、写入、更新等操作。
-    使用 TOML 格式存储配置文件，支持设置的合并和敏感信息掩码。
+    def __init__(self, settings_path: str = None):
+        # 初始化设置路径，如果没有提供则使用默认路径
+        if settings_path is None:
+            # 确定用户主目录
+            if os.name == 'nt':  # Windows
+                app_data = os.getenv('APPDATA')
+                self.settings_path = os.path.join(app_data, 'Jaaz', 'settings.json')
+            else:  # macOS/Linux
+                home = os.path.expanduser('~')
+                self.settings_path = os.path.join(home, '.jaaz', 'settings.json')
+        else:
+            self.settings_path = settings_path
 
-    Attributes:
-        root_dir (str): 项目根目录路径
-        settings_file (str): 设置文件的完整路径
-    """
+        # 确保设置文件目录存在
+        os.makedirs(os.path.dirname(self.settings_path), exist_ok=True)
 
-    def __init__(self):
-        """
-        初始化设置服务
+        # 初始化设置缓存
+        self._settings_cache = None
+        self._last_loaded = None
 
-        设置项目根目录和配置文件路径。
-        配置文件路径可通过环境变量 SETTINGS_PATH 自定义。
-        """
-        self.root_dir = os.path.dirname(
-            os.path.dirname(os.path.dirname(__file__)))
-        self.settings_file = os.getenv(
-            "SETTINGS_PATH", os.path.join(USER_DATA_DIR, "settings.json"))
+    def get_settings(self) -> Dict[str, Any]:
+        """获取所有设置，使用缓存机制"""
+        # 检查是否需要重新加载设置
+        if self._settings_cache is None or self._needs_reload():
+            self._load_settings()
+        return self._settings_cache.copy()
 
-    async def exists_settings(self):
-        """
-        检查设置文件是否存在
-
-        Returns:
-            bool: 如果设置文件存在返回 True，否则返回 False
-
-        Note:
-            这是一个异步方法，主要是为了保持 API 接口的一致性
-        """
-        return os.path.exists(self.settings_file)
-
-    def get_settings(self):
-        """
-        获取所有设置配置（用于 API 响应）
-
-        该方法会：
-        1. 读取设置文件（如果不存在则创建默认配置）
-        2. 与默认设置合并，确保所有必需的键都存在
-        3. 对敏感信息进行掩码处理
-        4. 更新全局设置缓存
-
-        Returns:
-            dict: 包含所有设置的字典，敏感信息已被掩码
-
-        Note:
-            返回的设置适用于 API 响应，敏感信息（如密码）会被 '*' 掩码
-        """
+    def get_raw_settings(self) -> Dict[str, Any]:
+        """直接从文件获取原始设置，不使用缓存"""
         try:
-            if not os.path.exists(self.settings_file):
-                # 如果设置文件不存在，创建默认设置文件
-                self.create_default_settings()
-
-            # 读取 JSON 配置文件
-            with open(self.settings_file, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-
-            # 与默认设置合并，确保所有键都存在
-            merged_settings = {**DEFAULT_SETTINGS}
-            for key, value in settings.items():
-                if key in merged_settings and isinstance(merged_settings[key], dict) and isinstance(value, dict):
-                    # 对于字典类型的设置，进行深度合并
-                    merged_settings[key].update(value)
-                else:
-                    # 其他类型直接覆盖
-                    merged_settings[key] = value
-
-            # 更新全局设置缓存（存储未掩码的完整版本）
-            global app_settings
-            app_settings = merged_settings
-            return merged_settings
+            if os.path.exists(self.settings_path):
+                with open(self.settings_path, 'r', encoding='utf-8') as file:
+                    settings = json.load(file)
+                    # 确保所有默认字段都存在
+                    return self._merge_with_defaults(settings)
+            else:
+                return DEFAULT_SETTINGS.copy()
         except Exception as e:
-            print(f"Error loading settings: {e}")
-            traceback.print_exc()
-            return DEFAULT_SETTINGS
+            logger.error(f"Failed to read settings file: {e}")
+            return DEFAULT_SETTINGS.copy()
 
-    def get_raw_settings(self):
-        """
-        获取原始设置（内部使用，不掩码敏感信息）
-
-        该方法返回完整的设置配置，包括敏感信息，主要用于：
-        1. 系统内部逻辑使用
-        2. 代理配置等需要完整信息的场景
-        3. 设置的验证和处理
-
-        Returns:
-            dict: 包含所有设置的完整字典，敏感信息未被掩码
-
-        Note:
-            此方法返回的数据包含敏感信息，仅供内部使用，不应直接用于 API 响应
-        """
+    def update_settings(self, updates: Dict[str, Any]) -> Dict[str, str]:
+        """更新设置并保存到文件"""
         try:
-            if not os.path.exists(self.settings_file):
-                # 如果设置文件不存在，创建默认设置
-                self.create_default_settings()
-
-            # 读取 JSON 配置文件
-            with open(self.settings_file, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-
-            # 与默认设置合并
-            merged_settings = {**DEFAULT_SETTINGS}
-            for key, value in settings.items():
-                if key in merged_settings and isinstance(merged_settings[key], dict) and isinstance(value, dict):
-                    merged_settings[key].update(value)
+            # 获取当前设置
+            current_settings = self.get_raw_settings()
+            
+            # 更新设置
+            for key, value in updates.items():
+                # 特殊处理嵌套对象的更新
+                if key in current_settings and isinstance(current_settings[key], dict) and isinstance(value, dict):
+                    # 递归更新嵌套字典
+                    current_settings[key].update(value)
                 else:
-                    merged_settings[key] = value
-
-            # 更新全局设置缓存
-            global app_settings
-            app_settings = merged_settings
-            return merged_settings
-        except Exception as e:
-            print(f"Error loading raw settings: {e}")
-            return DEFAULT_SETTINGS
-
-    def get_proxy_config(self):
-        """
-        获取代理配置
-
-        Returns:
-            str: 代理配置字符串
-                - '' : 不使用代理
-                - 'system' : 使用系统代理
-                - URL地址 : 使用指定的代理服务器
-        """
-        settings = self.get_raw_settings()
-        return settings.get('proxy', '')
-
-    def get_enabled_knowledge_ids(self):
-        """
-        获取启用的知识库ID列表
-
-        Returns:
-            list: 启用的知识库ID列表
-        """
-        settings = self.get_raw_settings()
-        return settings.get('enabled_knowledge', [])
-
-    async def update_enabled_knowledge(self, knowledge_ids):
-        """
-        更新启用的知识库列表
-
-        Args:
-            knowledge_ids (list): 知识库ID列表
-
-        Returns:
-            dict: 操作结果
-        """
-        return await self.update_settings({"enabled_knowledge": knowledge_ids})
-
-    def get_enabled_knowledge_data(self):
-        """
-        获取启用的知识库完整数据列表
-
-        Returns:
-            list: 知识库数据列表，每个项目包含name、description、content等信息
-        """
-        settings = self.get_raw_settings()
-        return settings.get('enabled_knowledge_data', [])
-
-    async def update_enabled_knowledge_data(self, knowledge_data_list):
-        """
-        更新启用的知识库完整数据
-
-        Args:
-            knowledge_data_list (list): 知识库数据列表，包含完整的知识库信息
-
-        Returns:
-            dict: 操作结果
-        """
-        # 同时更新ID列表和完整数据
-        knowledge_ids = [kb.get('id', '')
-                         for kb in knowledge_data_list if kb.get('id')]
-        return await self.update_settings({
-            "enabled_knowledge": knowledge_ids,
-            "enabled_knowledge_data": knowledge_data_list
-        })
-
-    def create_default_settings(self):
-        """
-        创建默认设置文件
-
-        当设置文件不存在时，根据 DEFAULT_SETTINGS 模板创建新的配置文件。
-        会自动创建必要的目录结构。
-
-        Raises:
-            Exception: 当文件创建失败时抛出异常
-        """
-        try:
-            # 确保目录存在
-            os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
-
-            # 写入默认设置到 JSON 文件
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
-                json.dump(DEFAULT_SETTINGS, f, indent=2)
-        except Exception as e:
-            print(f"Error creating default settings: {e}")
-
-    async def update_settings(self, data):
-        """
-        更新设置配置
-
-        该方法会：
-        1. 读取现有设置
-        2. 与新数据进行合并（深度合并字典类型）
-        3. 保存更新后的设置到文件
-        4. 更新全局设置缓存
-        5. 如果更新了代理设置，重新应用代理环境变量
-
-        Args:
-            data (dict): 要更新的设置数据，可以是部分设置
-
-        Returns:
-            dict: 包含操作状态和消息的字典
-                - status (str): "success" 或 "error"
-                - message (str): 操作结果描述
-
-        Example:
-            result = await settings_service.update_settings({
-                "proxy": {"enable": True, "url": "http://proxy.com:8080"}
-            })
-        """
-        try:
-            # 加载现有设置，如果文件不存在则使用默认设置
-            existing_settings = DEFAULT_SETTINGS.copy()
-            if os.path.exists(self.settings_file):
-                try:
-                    with open(self.settings_file, 'r', encoding='utf-8') as f:
-                        existing_settings = json.load(f)
-                except Exception as e:
-                    print(f"Error reading existing settings: {e}")
-
-            # 检查是否更新了代理设置
-            is_proxy_updated = "proxy" in data
-
-            # 合并新数据到现有设置
-            for key, value in data.items():
-                if key in existing_settings and isinstance(existing_settings[key], dict) and isinstance(value, dict):
-                    # 对于字典类型，进行深度合并而不是替换
-                    existing_settings[key].update(value)
-                else:
-                    # 其他类型直接覆盖
-                    existing_settings[key] = value
-
-            # 确保目录存在
-            os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
-
-            # 保存更新后的设置到文件
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
-                json.dump(existing_settings, f, indent=2)
-
-            # 更新全局设置缓存
-            global app_settings
-            app_settings = existing_settings
-
-            # 如果更新了代理设置，重新应用代理环境变量
-            if is_proxy_updated:
-                initialize_proxy_env()
-
+                    current_settings[key] = value
+            
+            # 更新最后修改时间
+            current_settings['lastUpdated'] = datetime.now().isoformat()
+            
+            # 保存到文件
+            with open(self.settings_path, 'w', encoding='utf-8') as file:
+                json.dump(current_settings, file, indent=2, ensure_ascii=False)
+            
+            # 清除缓存，下次获取时会重新加载
+            self._settings_cache = None
+            
+            # 如果更新了代理设置，重新初始化代理环境
+            if 'proxy' in updates or 'providerProxies' in updates:
+                self.initialize_proxy_env(current_settings)
+            
+            logger.info(f"Settings updated successfully")
             return {"status": "success", "message": "Settings updated successfully"}
         except Exception as e:
-            traceback.print_exc()
+            logger.error(f"Failed to update settings: {e}")
             return {"status": "error", "message": str(e)}
 
+    def get_proxy_config(self) -> Dict[str, Any]:
+        """获取代理配置"""
+        settings = self.get_settings()
+        return {
+            "proxy": settings.get("proxy", "system"),
+            "providerProxies": settings.get("providerProxies", {})
+        }
 
-# 创建全局设置服务实例
-# 整个应用程序使用这个单例实例来管理设置
-settings_service = SettingsService()
+    def initialize_proxy_env(self, settings: Optional[Dict[str, Any]] = None) -> None:
+        """根据设置初始化代理环境变量"""
+        try:
+            if settings is None:
+                settings = self.get_settings()
+            
+            # 获取代理设置
+            proxy = settings.get("proxy", "system")
+            provider_proxies = settings.get("providerProxies", {})
+            
+            # 清除现有的代理环境变量，避免冲突
+            proxy_env_vars = ["HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]
+            for var in proxy_env_vars:
+                if var in os.environ:
+                    del os.environ[var]
+            
+            # 根据代理类型进行处理
+            if proxy == "system":
+                # 系统代理模式，保留系统代理设置
+                logger.info("Using system proxy settings")
+            elif proxy == "no_proxy":
+                # 无代理模式
+                logger.info("Proxy disabled")
+            elif proxy.startswith(("http://", "https://", "socks4://", "socks5://")):
+                # 自定义代理URL
+                proxy_url = proxy
+                # 设置代理环境变量
+                for var in proxy_env_vars:
+                    os.environ[var] = proxy_url
+                
+                logger.info(f"Custom proxy configured: {proxy_url}")
+            
+            # 记录提供商代理设置状态
+            enabled_count = sum(1 for enabled in provider_proxies.values() if enabled)
+            if enabled_count > 0:
+                enabled_providers = [name for name, enabled in provider_proxies.items() if enabled]
+                logger.info(f"Provider-specific proxy enabled for: {', '.join(enabled_providers)}")
+            else:
+                logger.info("No provider-specific proxy settings enabled")
+        except Exception as e:
+            logger.error(f"Failed to initialize proxy environment: {e}")
 
-# 在模块导入时初始化设置
-# 确保全局设置缓存在应用启动时就被加载
-settings_service.get_raw_settings()
+    def get_provider_proxy_enabled(self, provider_key: str) -> bool:
+        """检查特定提供商是否启用了代理"""
+        settings = self.get_settings()
+        provider_proxies = settings.get("providerProxies", {})
+        return provider_proxies.get(provider_key, False)
 
-# 初始化代理环境变量
-def initialize_proxy_env():
-    """
-    初始化代理环境变量
-    将设置中的代理配置应用到系统环境变量中
-    """
-    import os
-    from services.settings_service import settings_service
-    
-    proxy_config = settings_service.get_proxy_config()
-    
-    # 清除现有的代理环境变量
-    for env_key in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
-        if env_key in os.environ:
-            del os.environ[env_key]
-    
-    # 根据代理配置设置环境变量
-    if proxy_config == 'system':
-        # 系统代理模式 - 保留系统现有的代理环境变量
-        pass
-    elif proxy_config == 'no_proxy':
-        # 不使用代理 - 确保没有代理环境变量
-        pass
-    elif proxy_config.startswith(('http://', 'https://', 'socks4://', 'socks5://')):
-        # 自定义代理URL - 设置为环境变量
-        os.environ['HTTP_PROXY'] = os.environ['http_proxy'] = proxy_config
-        os.environ['HTTPS_PROXY'] = os.environ['https_proxy'] = proxy_config
+    def _load_settings(self) -> None:
+        """从文件加载设置到缓存"""
+        try:
+            if os.path.exists(self.settings_path):
+                with open(self.settings_path, 'r', encoding='utf-8') as file:
+                    self._settings_cache = self._merge_with_defaults(json.load(file))
+                self._last_loaded = os.path.getmtime(self.settings_path)
+            else:
+                # 如果文件不存在，使用默认设置并创建文件
+                self._settings_cache = DEFAULT_SETTINGS.copy()
+                self._save_default_settings()
+                self._last_loaded = os.path.getmtime(self.settings_path) if os.path.exists(self.settings_path) else None
+        except Exception as e:
+            logger.error(f"Failed to load settings: {e}")
+            self._settings_cache = DEFAULT_SETTINGS.copy()
 
-# 初始应用代理设置
-initialize_proxy_env()
+    def _merge_with_defaults(self, settings: Dict[str, Any]) -> Dict[str, Any]:
+        """将用户设置与默认设置合并，确保所有必需字段都存在"""
+        result = DEFAULT_SETTINGS.copy()
+        for key, value in settings.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                # 递归合并嵌套字典
+                result[key] = {**result[key], **value}
+            else:
+                result[key] = value
+        return result
+
+    def _save_default_settings(self) -> None:
+        """保存默认设置到文件"""
+        try:
+            os.makedirs(os.path.dirname(self.settings_path), exist_ok=True)
+            with open(self.settings_path, 'w', encoding='utf-8') as file:
+                json.dump(DEFAULT_SETTINGS, file, indent=2, ensure_ascii=False)
+            logger.info(f"Default settings saved to {self.settings_path}")
+        except Exception as e:
+            logger.error(f"Failed to save default settings: {e}")
+
+    def _needs_reload(self) -> bool:
+        """检查是否需要重新加载设置"""
+        if not os.path.exists(self.settings_path):
+            return False
+        try:
+            current_mtime = os.path.getmtime(self.settings_path)
+            return self._last_loaded is None or current_mtime > self._last_loaded
+        except Exception as e:
+            logger.error(f"Failed to check settings modification time: {e}")
+            return True
+
+    def settings_file_exists(self) -> bool:
+        """检查设置文件是否存在"""
+        return os.path.exists(self.settings_path)
+
+    def reset_settings(self) -> Dict[str, str]:
+        """重置设置为默认值"""
+        try:
+            if os.path.exists(self.settings_path):
+                os.remove(self.settings_path)
+            self._settings_cache = None
+            self._load_settings()
+            logger.info("Settings reset to default")
+            return {"status": "success", "message": "Settings reset to default"}
+        except Exception as e:
+            logger.error(f"Failed to reset settings: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        """获取单个设置"""
+        settings = self.get_settings()
+        return settings.get(key, default)
+
+    def update_setting(self, key: str, value: Any) -> Dict[str, str]:
+        """更新单个设置"""
+        return self.update_settings({key: value})
+
+    def validate_settings(self, settings: Dict[str, Any]) -> Dict[str, str]:
+        """验证设置的有效性"""
+        # 基本验证逻辑
+        if "proxy" in settings:
+            proxy_value = settings["proxy"]
+            if proxy_value not in ["no_proxy", "system"] and not proxy_value.startswith(("http://", "https://", "socks4://", "socks5://")):
+                return {"status": "error", "message": "Invalid proxy format"}
+        
+        # 验证提供商代理设置
+        if "providerProxies" in settings:
+            provider_proxies = settings["providerProxies"]
+            if not isinstance(provider_proxies, dict):
+                return {"status": "error", "message": "providerProxies must be a dictionary"}
+            
+            for provider_key, enabled in provider_proxies.items():
+                if not isinstance(provider_key, str) or not isinstance(enabled, bool):
+                    return {"status": "error", "message": "Invalid provider proxy configuration"}
+        
+        return {"status": "success", "message": "Settings validated"}
+
+# 创建全局实例供其他模块使用
+global_settings_service = SettingsService()
+
+def get_settings_service() -> SettingsService:
+    """获取全局设置服务实例"""
+    return global_settings_service
+
+# 为了向后兼容，提供 settings_service 别名
+settings_service = get_settings_service()

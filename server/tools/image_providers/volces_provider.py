@@ -10,7 +10,7 @@ from .image_base_provider import ImageProviderBase
 from ..utils.image_utils import get_image_info_and_save, generate_image_id
 from tools.video_generation_utils import get_image_base64
 from services.config_service import FILES_DIR, config_service
-from utils.http_client import HttpClient
+from utils.http_client import get_http_client
 
 
 class VolcesImagesResponse(BaseModel):
@@ -135,7 +135,7 @@ class VolcesProvider(ImageProviderBase):
 
                 url = str(api_url).strip("/") + "/images/generations"
 
-                async with HttpClient.create_aiohttp() as session:
+                async with get_http_client().create_aiohttp_client_session(provider_key="volces") as session:
                     async with session.post(
                         url, headers=headers, json=payload
                     ) as response:
