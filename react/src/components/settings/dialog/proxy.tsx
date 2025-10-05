@@ -19,6 +19,7 @@ type ProxyMode = 'no_proxy' | 'system' | 'custom'
 interface ProxyConfig {
   mode: ProxyMode
   url: string
+  enableProviderProxies: boolean
 }
 
 // 提供商代理配置接口
@@ -32,10 +33,11 @@ const SettingProxy = () => {
   const [errorMessage, setErrorMessage] = useState('')
   const [proxyConfig, setProxyConfig] = useState<ProxyConfig>({
     mode: 'system',
-    url: ''
+    url: '',
+    enableProviderProxies: false
   })
   // 所有可用提供商
-  const [providers, setProviders] = useState<Array<{key: string, label: string}>>([])
+  const [providers, setProviders] = useState<Array<{ key: string, label: string }>>([])
   // 提供商代理设置
   const [providerProxies, setProviderProxies] = useState<ProviderProxyConfig>({})
 
@@ -44,7 +46,7 @@ const SettingProxy = () => {
     const loadConfig = async () => {
       try {
         setIsLoading(true)
-        
+
         // 并行加载所有需要的配置
         const [proxySettings, allSettings, configSettings] = await Promise.all([
           getProxySettings(),
@@ -56,6 +58,7 @@ const SettingProxy = () => {
         const proxyValue = (proxySettings.proxy as string) || 'system'
         let mode: ProxyMode = 'system'
         let url = ''
+        let enableProviderProxies = false
 
         if (proxyValue === 'no_proxy') {
           mode = 'no_proxy'
@@ -66,27 +69,32 @@ const SettingProxy = () => {
           url = proxyValue
         }
 
-        setProxyConfig({ mode, url })
+        // 加载局部代理总开关设置
+        if (allSettings.enableProviderProxies !== undefined) {
+          enableProviderProxies = Boolean(allSettings.enableProviderProxies)
+        }
+
+        setProxyConfig({ mode, url, enableProviderProxies })
 
         // 加载局部代理设置
         const providerProxySettings = allSettings.providerProxies || {}
-        setProviderProxies(providerProxySettings)
+        setProviderProxies(providerProxySettings as ProviderProxyConfig)
 
         // 构建提供商列表
-        const providerList: Array<{key: string, label: string}> = []
-        
+        const providerList: Array<{ key: string, label: string }> = []
+
         // 添加内置提供商
         const builtInProviders = [
-          {key: 'anthropic', label: 'Claude'},
-          {key: 'OpenRouter', label: 'OpenRouter'},
-          {key: 'wavespeed', label: 'Wavespeed'},
-          {key: 'replicate', label: 'Replicate'},
-          {key: '深度求索', label: '深度求索 (DeepSeek)'},
-          {key: 'volces', label: '火山引擎 (Volces)'},
-          {key: 'GoogleVertex', label: 'GoogleVertex'},
-          {key: '硅基流动', label: '硅基流动 (SiliconFlow)'},
-          {key: '智谱 AI', label: '智谱 AI (GLM)'},
-          {key: '月之暗面', label: '月之暗面 (Kimi)'}
+          { key: 'anthropic', label: 'Claude' },
+          { key: 'OpenRouter', label: 'OpenRouter' },
+          { key: 'wavespeed', label: 'Wavespeed' },
+          { key: 'replicate', label: 'Replicate' },
+          { key: '深度求索', label: '深度求索 (DeepSeek)' },
+          { key: 'volces', label: '火山引擎 (Volces)' },
+          { key: 'GoogleVertex', label: 'GoogleVertex' },
+          { key: '硅基流动', label: '硅基流动 (SiliconFlow)' },
+          { key: '智谱 AI', label: '智谱 AI (GLM)' },
+          { key: '月之暗面', label: '月之暗面 (Kimi)' }
         ]
         providerList.push(...builtInProviders)
 
@@ -119,6 +127,11 @@ const SettingProxy = () => {
   // 处理全局代理URL变更
   const handleUrlChange = (url: string) => {
     setProxyConfig(prev => ({ ...prev, url }))
+  }
+
+  // 处理局部代理总开关变更
+  const handleEnableProviderProxiesChange = (checked: boolean) => {
+    setProxyConfig(prev => ({ ...prev, enableProviderProxies: checked }))
   }
 
   // 处理提供商代理开关变更
@@ -162,7 +175,8 @@ const SettingProxy = () => {
 
       // 保存局部代理设置
       const settingsResult = await updateSettings({
-        providerProxies: providerProxies
+        providerProxies: providerProxies,
+        enableProviderProxies: proxyConfig.enableProviderProxies
       })
 
       if (proxyResult.status === 'success' && settingsResult.status === 'success') {
@@ -226,17 +240,30 @@ const SettingProxy = () => {
                 </div>
 
                 {proxyConfig.mode === 'custom' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="proxy-url" className="text-sm font-medium">
-                      {t('settings:proxy:url')}
-                    </Label>
-                    <Input
-                      id="proxy-url"
-                      type="text"
-                      placeholder={t('settings:proxy:urlPlaceholder')}
-                      value={proxyConfig.url}
-                      onChange={(e) => handleUrlChange(e.target.value)}
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="proxy-url" className="text-sm font-medium">
+                        {t('settings:proxy:url')}
+                      </Label>
+                      <Input
+                        id="proxy-url"
+                        type="text"
+                        placeholder={t('settings:proxy:urlPlaceholder')}
+                        value={proxyConfig.url}
+                        onChange={(e) => handleUrlChange(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="enable-provider-proxies" className="text-sm font-medium">
+                        启用局部代理
+                      </Label>
+                      <Checkbox
+                        id="enable-provider-proxies"
+                        checked={proxyConfig.enableProviderProxies}
+                        onCheckedChange={(checked) => handleEnableProviderProxiesChange(checked as boolean)}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -244,34 +271,36 @@ const SettingProxy = () => {
           </Card>
 
           {/* 局部代理设置卡片 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">提供商代理设置</CardTitle>
-              <CardDescription>为特定提供商启用或禁用代理（仅在全局代理启用时生效）</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {providers.length > 0 ? (
-                  providers.map((provider) => (
-                    <div key={provider.key} className="flex items-center justify-between py-2">
-                      <Label htmlFor={`proxy-${provider.key}`} className="text-sm font-medium cursor-pointer">
-                        {provider.label}
-                      </Label>
-                      <Checkbox
-                        id={`proxy-${provider.key}`}
-                        checked={providerProxies[provider.key] || false}
-                        onCheckedChange={(checked) => handleProviderProxyChange(provider.key, checked as boolean)}
-                      />
+          {(proxyConfig.mode === 'custom' && proxyConfig.enableProviderProxies) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold">提供商代理设置</CardTitle>
+                <CardDescription>为特定提供商启用或禁用代理</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                  {providers.length > 0 ? (
+                    providers.map((provider) => (
+                      <div key={provider.key} className="flex items-center justify-between py-2">
+                        <Label htmlFor={`proxy-${provider.key}`} className="text-sm font-medium cursor-pointer">
+                          {provider.label}
+                        </Label>
+                        <Checkbox
+                          id={`proxy-${provider.key}`}
+                          checked={providerProxies[provider.key] || false}
+                          onCheckedChange={(checked) => handleProviderProxyChange(provider.key, checked as boolean)}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">
+                      未找到可用的提供商
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center text-muted-foreground py-4">
-                    未找到可用的提供商
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

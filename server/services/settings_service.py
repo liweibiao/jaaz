@@ -52,13 +52,8 @@ class SettingsService:
     def __init__(self, settings_path: str = None):
         # 初始化设置路径，如果没有提供则使用默认路径
         if settings_path is None:
-            # 确定用户主目录
-            if os.name == 'nt':  # Windows
-                app_data = os.getenv('APPDATA')
-                self.settings_path = os.path.join(app_data, 'Jaaz', 'settings.json')
-            else:  # macOS/Linux
-                home = os.path.expanduser('~')
-                self.settings_path = os.path.join(home, '.jaaz', 'settings.json')
+            # 默认使用server/user_data/settings.json
+            self.settings_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'user_data', 'settings.json')
         else:
             self.settings_path = settings_path
 
@@ -70,11 +65,35 @@ class SettingsService:
         self._last_loaded = None
 
     def get_settings(self) -> Dict[str, Any]:
-        """获取所有设置，使用缓存机制"""
+        """获取所有设置，使用缓存机制，并对敏感信息进行掩码处理"""
         # 检查是否需要重新加载设置
         if self._settings_cache is None or self._needs_reload():
             self._load_settings()
-        return self._settings_cache.copy()
+        
+        # 复制设置以避免修改原始缓存
+        masked_settings = self._settings_cache.copy()
+        
+        # 对Google OAuth敏感信息进行掩码处理
+        if 'googleOAuth' in masked_settings and isinstance(masked_settings['googleOAuth'], dict):
+            if 'clientId' in masked_settings['googleOAuth'] and masked_settings['googleOAuth']['clientId']:
+                masked_settings['googleOAuth']['clientId'] = self._mask_string(masked_settings['googleOAuth']['clientId'])
+            if 'clientSecret' in masked_settings['googleOAuth'] and masked_settings['googleOAuth']['clientSecret']:
+                masked_settings['googleOAuth']['clientSecret'] = '******'
+        
+        # 对API密钥进行掩码处理
+        if 'apiKeys' in masked_settings and isinstance(masked_settings['apiKeys'], dict):
+            for key in masked_settings['apiKeys']:
+                if masked_settings['apiKeys'][key]:
+                    masked_settings['apiKeys'][key] = self._mask_string(masked_settings['apiKeys'][key])
+        
+        return masked_settings
+    
+    def _mask_string(self, text: str) -> str:
+        """掩码处理字符串，保留前几位和后几位，中间用*代替"""
+        if len(text) <= 8:
+            return '******'
+        # 保留前4位和后4位
+        return text[:4] + '*' * (len(text) - 8) + text[-4:]
 
     def get_raw_settings(self) -> Dict[str, Any]:
         """直接从文件获取原始设置，不使用缓存"""

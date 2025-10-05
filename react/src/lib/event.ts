@@ -35,7 +35,13 @@ export type TTemplateSendToChatEvent = {
 }
 
 export type TEvents = {
-  // ********** Socket events - Start **********
+  // ********** Socket connection events - Start **********
+  'Socket::Connection::Success': { socketId?: string }
+  'Socket::Connection::Error': { error: string }
+  'Socket::Connection::Disconnected': { reason: string }
+  // ********** Socket connection events - End **********
+  
+  // ********** Socket session events - Start **********
   'Socket::Session::Error': ISocket.SessionErrorEvent
   'Socket::Session::Done': ISocket.SessionDoneEvent
   'Socket::Session::Info': ISocket.SessionInfoEvent
@@ -50,7 +56,7 @@ export type TEvents = {
   'Socket::Session::ToolCallPendingConfirmation': ISocket.SessionToolCallPendingConfirmationEvent
   'Socket::Session::ToolCallConfirmed': ISocket.SessionToolCallConfirmedEvent
   'Socket::Session::ToolCallCancelled': ISocket.SessionToolCallCancelledEvent
-  // ********** Socket events - End **********
+  // ********** Socket session events - End **********
 
   // ********** Canvas events - Start **********
   'Canvas::AddImagesToChat': TCanvasAddImagesToChatEvent

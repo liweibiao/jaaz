@@ -11,7 +11,7 @@ interface PointsDisplayProps {
 export function PointsDisplay({ className, children }: PointsDisplayProps) {
   const { balance } = useBalance()
 
-  // 将金额乘以 100 转换为积分，显示为整数，如果为负数则显示 0
+  // 后端返回的是浮点数，需要乘以 100 转换为整数积分值
   const points = Math.max(0, Math.floor(parseFloat(balance) * 100))
 
   return (

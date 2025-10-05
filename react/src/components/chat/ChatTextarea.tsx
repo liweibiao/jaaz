@@ -98,7 +98,7 @@ const ChatTextarea: React.FC<ChatTextareaProps> = ({
         variant="outline"
         className="shrink-0"
         onClick={() => {
-          const billingUrl = `${BASE_API_URL}/billing`
+          const billingUrl = `https://jaaz.app/billing`
           if (window.electronAPI?.openBrowserUrl) {
             window.electronAPI.openBrowserUrl(billingUrl)
           } else {

@@ -1,4 +1,5 @@
 from models.tool_model import ToolInfoJson
+import os
 from services.db_service import db_service
 from .StreamProcessor import StreamProcessor
 from .agent_manager import AgentManager
@@ -7,6 +8,7 @@ from utils.http_client import HttpClient, get_http_client
 from langgraph_swarm import create_swarm  # type: ignore
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI  # 导入Google Gemini专用模型
 from services.websocket_service import send_to_websocket  # type: ignore
 from services.config_service import config_service
 from typing import Optional, List, Dict, Any, cast, Set, TypedDict
@@ -94,49 +96,92 @@ async def langgraph_multi_agent(
         tool_list: 工具模型配置列表（图像或视频模型）
         system_prompt: 系统提示词
     """
+    print(f"\n🚀 开始处理会话: {session_id}")
+    print(f"📋 使用模型: {text_model.get('provider')} - {text_model.get('model')}")
+    print(f"💬 消息数量: {len(messages)}")
+    print(f"🎨 工具数量: {len(tool_list)}")
+    
     try:
         # 0. 修复消息历史
+        print("🔧 修复消息历史...")
         fixed_messages = _fix_chat_history(messages)
+        print(f"✅ 消息历史修复完成，修复后消息数: {len(fixed_messages)}")
 
-        # 2. 文本模型
-        text_model_instance = _create_text_model(text_model)
+        # 1. 发送开始处理通知
+        print("📤 发送开始处理通知到前端...")
+        await send_to_websocket(session_id, cast(Dict[str, Any], {
+            'type': 'info',
+            'info': f'开始处理您的请求，使用模型: {text_model.get("model")}'
+        }))
+
+        # 2. 创建文本模型
+        print("🧠 创建文本模型实例...")
+        # 新增：检查是否是新画布或空消息场景
+        is_new_session = len(fixed_messages) == 0
+        text_model_instance = _create_text_model(text_model, is_new_session)
+        print(f"✅ 文本模型创建成功: {text_model.get('provider')} - {text_model.get('model')}")
+        
+        # 新增：在新会话场景下，直接返回欢迎消息，避免完整的流处理
+        if is_new_session:
+            print("🚀 在新会话场景下，直接发送欢迎消息并结束处理")
+            await send_to_websocket(session_id, cast(Dict[str, Any], {
+                'session_id': session_id,
+                'type': 'stream',
+                'content': "欢迎使用Jaaz！\n\n看起来您还没有配置API密钥。请先在设置中配置您的API密钥，然后您就可以开始使用完整功能了。",
+                'end': True
+            }))
+            print("✅ 欢迎消息发送完成，跳过完整流处理流程")
+            return
 
         # 3. 创建智能体
+        print("🤖 创建智能体...")
         agents = AgentManager.create_agents(
             text_model_instance,
             tool_list,  # 传入所有注册的工具
             system_prompt or ""
         )
         agent_names = [agent.name for agent in agents]
-        print('👇agent_names', agent_names)
+        print(f'✅ 创建的智能体列表: {agent_names}')
+        
+        # 4. 确定上一个活跃的智能体
+        print("🔍 查找上一个活跃的智能体...")
         last_agent = AgentManager.get_last_active_agent(
             fixed_messages, agent_names)
+        print(f'✅ 上一个活跃的智能体: {last_agent if last_agent else "默认智能体"}')
 
-        print('👇last_agent', last_agent)
-
-        # 4. 创建智能体群组
+        # 5. 创建智能体群组
+        print("👥 创建智能体群组...")
         swarm = create_swarm(
             agents=agents,  # type: ignore
             default_active_agent=last_agent if last_agent else agent_names[0]
         )
+        print("✅ 智能体群组创建成功")
 
-        # 5. 创建上下文
+        # 6. 创建上下文
+        print("📝 创建上下文...")
         context = {
             'canvas_id': canvas_id,
             'session_id': session_id,
             'tool_list': tool_list,
+            'model': text_model.get('model'),  # 添加模型名称，便于StreamProcessor识别Google模型
+            'provider': text_model.get('provider'),  # 添加提供商信息
         }
+        print(f"✅ 上下文创建成功: {context}")
 
-        # 6. 流处理
+        # 7. 流处理
+        print("💨 开始流处理...")
         processor = StreamProcessor(
-            session_id, db_service, send_to_websocket)  # type: ignore
+            session_id, db_service, send_to_websocket, canvas_id)  # type: ignore
+        print(f"✅ 流处理器创建成功，准备处理流式响应")
         await processor.process_stream(swarm, fixed_messages, context)
+        print("✅ 流处理完成")
 
     except Exception as e:
+        print(f"❌ 处理会话时发生错误: {str(e)}")
         await _handle_error(e, session_id)
 
 
-def _create_text_model(text_model: ModelInfo) -> Any:
+def _create_text_model(text_model: ModelInfo, is_new_session: bool = False) -> Any:
     """创建语言模型实例"""
     model = text_model.get('model')
     provider = text_model.get('provider')
@@ -153,6 +198,25 @@ def _create_text_model(text_model: ModelInfo) -> Any:
             base_url=url,
         )
     else:
+        # 检查API密钥是否为空
+        if not api_key:
+            # 新增：在新会话场景下不抛出错误，允许用户先体验界面
+            if is_new_session:
+                print("⚠️ 在新会话场景下绕过API密钥检测")
+                # 返回一个模拟的模型实例，避免在空会话时抛出API密钥错误
+                class MockModel:
+                    async def invoke(self, messages, **kwargs):
+                        from langchain_core.messages import AIMessage
+                        return AIMessage(content="欢迎使用Jaaz！\n\n看起来您还没有配置API密钥。请先在设置中配置您的API密钥，然后您就可以开始使用完整功能了。")
+                    
+                    def bind_tools(self, tools, **kwargs):
+                        # 模拟bind_tools方法，返回self以支持链式调用
+                        return self
+                return MockModel()
+            
+            # 如果不是新会话且API密钥为空，抛出明确的错误信息
+            raise ValueError(f"API密钥未设置: 请在设置中配置{provider}的API密钥")
+            
         # Create httpx client with SSL configuration for ChatOpenAI
         http_client = get_http_client().create_httpx_client(provider_key=provider)
         http_async_client = get_http_client().create_async_httpx_client(provider_key=provider)
@@ -181,7 +245,9 @@ async def _handle_error(error: Exception, session_id: str) -> None:
     # 记录清理后的错误消息
     print(f"清理后的错误消息: {clean_error}")
 
+    # 确保错误消息包含session_id字段，以便前端正确处理
     await send_to_websocket(session_id, cast(Dict[str, Any], {
+        'session_id': session_id,
         'type': 'error',
         'error': clean_error
     }))

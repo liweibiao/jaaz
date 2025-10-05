@@ -1,0 +1,13 @@
+from .config_router import router as config_router
+from .image_router import router as image_router
+from .root_router import router as root_router
+from .workspace import router as workspace
+from .canvas import router as canvas
+from .ssl_test import router as ssl_test
+from .chat_router import router as chat_router
+from .settings import router as settings
+from .tool_confirmation import router as tool_confirmation
+from .templates_router import router as templates_router
+from .file_router import router as file_router
+from .auth_router import router as auth_router
+from .billing_router import router as billing_router

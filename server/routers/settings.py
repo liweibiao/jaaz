@@ -30,7 +30,6 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from services.db_service import db_service
 from services.settings_service import settings_service
-from services.tool_service import tool_service
 from services.knowledge_service import list_user_enabled_knowledge
 from pydantic import BaseModel
 
@@ -167,7 +166,96 @@ async def get_proxy_settings():
         }
     """
     proxy_config = settings_service.get_proxy_config()
-    return {"proxy": proxy_config}
+    # 只返回proxy字段的值，而不是整个配置对象
+    return {"proxy": proxy_config.get("proxy", "system")}
+
+
+@router.get("/proxy/test")
+async def test_proxy_connection(url: str = "https://httpbin.org/get"):
+    """
+    测试代理连接是否正常工作
+
+    Args:
+        url: 要测试的目标URL，默认为httpbin.org
+
+    Returns:
+        dict: 包含测试结果的字典
+    """
+    import httpx
+    import time
+    from utils.http_client import get_http_client
+    from loguru import logger
+    
+    result = {
+        "success": False,
+        "message": "",
+        "details": {}
+    }
+    
+    try:
+        # 获取当前代理设置
+        proxy_config = settings_service.get_proxy_config()
+        proxy_value = proxy_config.get("proxy", "system")
+        
+        result["details"]["proxy_config"] = {
+            "proxy": proxy_value,
+            "providerProxies": proxy_config.get("providerProxies", {})
+        }
+        
+        # 测试参数准备
+        test_kwargs = {}
+        start_time = time.time()
+        
+        # 使用全局HTTP客户端测试（会应用当前的代理设置）
+        http_client = get_http_client()
+        
+        # 首先测试带代理的连接
+        try:
+            result["details"]["test_with_proxy"] = {}
+            logger.info(f"Testing proxy connection to {url} with current settings")
+            response = await http_client.async_get(url, timeout=10)
+            
+            result["details"]["test_with_proxy"]["success"] = True
+            result["details"]["test_with_proxy"]["status_code"] = response.status_code
+            result["details"]["test_with_proxy"]["time_taken"] = round(time.time() - start_time, 3)
+            
+            # 如果响应是JSON，尝试解析它
+            try:
+                result["details"]["test_with_proxy"]["response_data"] = response.json()
+            except Exception as e:
+                result["details"]["test_with_proxy"]["response_text"] = response.text[:200] + "..."
+                result["details"]["test_with_proxy"]["json_parse_error"] = str(e)
+            
+            result["success"] = True
+            result["message"] = f"Proxy connection test successful (Status: {response.status_code})"
+        except Exception as e:
+            result["details"]["test_with_proxy"]["success"] = False
+            result["details"]["test_with_proxy"]["error"] = str(e)
+            result["details"]["test_with_proxy"]["time_taken"] = round(time.time() - start_time, 3)
+            
+            # 尝试不使用代理的连接作为对比
+            try:
+                no_proxy_start_time = time.time()
+                result["details"]["test_without_proxy"] = {}
+                logger.info(f"Testing direct connection to {url} without proxy")
+                response = await http_client.async_get(url, timeout=10, proxy=None)
+                
+                result["details"]["test_without_proxy"]["success"] = True
+                result["details"]["test_without_proxy"]["status_code"] = response.status_code
+                result["details"]["test_without_proxy"]["time_taken"] = round(time.time() - no_proxy_start_time, 3)
+                
+                result["success"] = False  # 带代理的连接仍然失败
+                result["message"] = f"Proxy connection failed, but direct connection succeeded. Proxy server might be down or misconfigured."
+            except Exception as direct_error:
+                result["details"]["test_without_proxy"]["success"] = False
+                result["details"]["test_without_proxy"]["error"] = str(direct_error)
+                result["details"]["test_without_proxy"]["time_taken"] = round(time.time() - no_proxy_start_time, 3)
+                
+                result["message"] = f"Both proxy and direct connections failed: {str(e)}"
+    except Exception as e:
+        result["message"] = f"Test execution failed: {str(e)}"
+    
+    return result
 
 
 @router.post("/proxy")
@@ -253,6 +341,8 @@ async def create_workflow(request: CreateWorkflowRequest):
         inputs = json.dumps(request.inputs)
         outputs = json.dumps(request.outputs)
         await db_service.create_comfy_workflow(name, api_json, request.description, inputs, outputs)
+        # 延迟导入以避免循环依赖
+        from services.tool_service import tool_service
         await tool_service.initialize()
         return {"success": True}
     except Exception as e:
@@ -268,6 +358,8 @@ async def list_workflows():
 @router.delete("/comfyui/delete_workflow/{id}")
 async def delete_workflow(id: int):
     result = await db_service.delete_comfy_workflow(id)
+    # 延迟导入以避免循环依赖
+    from services.tool_service import tool_service
     await tool_service.initialize()
     return result
 

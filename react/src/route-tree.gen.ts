@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as AssetsRouteImport } from './routes/assets'
 import { Route as Agent_studioRouteImport } from './routes/agent_studio'
@@ -22,6 +23,11 @@ import { Route as TemplateMyCreateRouteImport } from './routes/template.my.creat
 const TemplatesRoute = TemplatesRouteImport.update({
   id: '/templates',
   path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KnowledgeRoute = KnowledgeRouteImport.update({
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/agent_studio': typeof Agent_studioRoute
   '/assets': typeof AssetsRoute
   '/knowledge': typeof KnowledgeRoute
+  '/login': typeof LoginRoute
   '/templates': typeof TemplatesRoute
   '/canvas/$id': typeof CanvasIdRoute
   '/template-use/$templateId': typeof TemplateUseTemplateIdRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/agent_studio': typeof Agent_studioRoute
   '/assets': typeof AssetsRoute
   '/knowledge': typeof KnowledgeRoute
+  '/login': typeof LoginRoute
   '/templates': typeof TemplatesRoute
   '/canvas/$id': typeof CanvasIdRoute
   '/template-use/$templateId': typeof TemplateUseTemplateIdRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/agent_studio': typeof Agent_studioRoute
   '/assets': typeof AssetsRoute
   '/knowledge': typeof KnowledgeRoute
+  '/login': typeof LoginRoute
   '/templates': typeof TemplatesRoute
   '/canvas/$id': typeof CanvasIdRoute
   '/template-use/$templateId': typeof TemplateUseTemplateIdRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/agent_studio'
     | '/assets'
     | '/knowledge'
+    | '/login'
     | '/templates'
     | '/canvas/$id'
     | '/template-use/$templateId'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/agent_studio'
     | '/assets'
     | '/knowledge'
+    | '/login'
     | '/templates'
     | '/canvas/$id'
     | '/template-use/$templateId'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/agent_studio'
     | '/assets'
     | '/knowledge'
+    | '/login'
     | '/templates'
     | '/canvas/$id'
     | '/template-use/$templateId'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   Agent_studioRoute: typeof Agent_studioRoute
   AssetsRoute: typeof AssetsRoute
   KnowledgeRoute: typeof KnowledgeRoute
+  LoginRoute: typeof LoginRoute
   TemplatesRoute: typeof TemplatesRoute
   CanvasIdRoute: typeof CanvasIdRoute
   TemplateUseTemplateIdRoute: typeof TemplateUseTemplateIdRoute
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/templates'
       fullPath: '/templates'
       preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/knowledge': {
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   Agent_studioRoute: Agent_studioRoute,
   AssetsRoute: AssetsRoute,
   KnowledgeRoute: KnowledgeRoute,
+  LoginRoute: LoginRoute,
   TemplatesRoute: TemplatesRoute,
   CanvasIdRoute: CanvasIdRoute,
   TemplateUseTemplateIdRoute: TemplateUseTemplateIdRoute,

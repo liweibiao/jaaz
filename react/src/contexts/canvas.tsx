@@ -1,5 +1,5 @@
+import React, { createContext, useContext } from 'react'
 import useCanvasStore from '@/stores/canvas'
-import { createContext, useContext } from 'react'
 
 export const CanvasContext = createContext<{
   canvasStore: typeof useCanvasStore

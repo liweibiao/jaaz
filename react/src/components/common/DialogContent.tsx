@@ -12,12 +12,14 @@ type CommonDialogProps = {
   children: React.ReactNode
   className?: string
   transformPerspective?: number
+  ariaLabelledby?: string
 }
 
 const CommonDialogContent: React.FC<CommonDialogProps> = ({
   open,
   children,
   className,
+  ariaLabelledby,
 }) => {
   // 使用 forceMount 确保组件始终挂载，避免动画闪烁
   if (!open) return null
@@ -34,6 +36,7 @@ const CommonDialogContent: React.FC<CommonDialogProps> = ({
             'animate-in zoom-in-95 duration-300',
             className
           )}
+          aria-labelledby={ariaLabelledby}
         >
           {children}
           <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 opacity-70 ring-offset-background transition-all hover:opacity-100 hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none cursor-pointer">

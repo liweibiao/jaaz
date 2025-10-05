@@ -52,6 +52,8 @@ from tools.generate_image_by_recraft_v3_replicate import (
 from tools.generate_video_by_hailuo_02_jaaz import generate_video_by_hailuo_02_jaaz
 from tools.generate_video_by_veo3_fast_jaaz import generate_video_by_veo3_fast_jaaz
 from tools.generate_image_by_midjourney_jaaz import generate_image_by_midjourney_jaaz
+from tools.generate_image_by_goolgle_nano_banana import generate_image_by_google_nano_banana
+from tools.generate_image_by_googlevertex_gemini import generate_image_by_googlevertex_gemini
 from services.config_service import config_service
 from services.db_service import db_service
 
@@ -127,6 +129,18 @@ TOOL_MAPPING: Dict[str, ToolInfo] = {
         "type": "image",
         "provider": "volces",
         "tool_function": generate_image_by_doubao_seedream_4_volces,
+    },
+    "generate_image_by_google_nano_banana": {
+        "display_name": "gemini-2.5-flash-image",
+        "type": "image",
+        "provider": "google_nano",
+        "tool_function": generate_image_by_google_nano_banana,
+    },
+    "generate_image_by_googlevertex_gemini": {
+        "display_name": "gemini-2.5-flash-image-preview",
+        "type": "image",
+        "provider": "googlevertex",
+        "tool_function": generate_image_by_googlevertex_gemini,
     },
     "generate_video_by_seedance_v1_jaaz": {
         "display_name": "Doubao Seedance v1",

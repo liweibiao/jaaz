@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录中 - Jaaz</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #6366f1;
+            margin: 0 auto 1rem;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .message {
+            font-size: 1rem;
+            color: #374151;
+            margin-bottom: 1rem;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            background-color: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #4f46e5;
+        }
+        .error {
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner" id="spinner"></div>
+        <p class="message" id="message">正在处理登录请求...</p>
+        <button class="btn" id="closeBtn" style="display: none;">关闭</button>
+    </div>
+
+    <script>
+        // 解析URL参数
+        function getUrlParams() {
+            const params = {};
+            const searchParams = new URLSearchParams(window.location.search);
+            searchParams.forEach((value, key) => {
+                params[key] = value;
+            });
+            return params;
+        }
+
+        // 获取URL参数
+        const params = getUrlParams();
+        const messageElement = document.getElementById('message');
+        const spinner = document.getElementById('spinner');
+        const closeBtn = document.getElementById('closeBtn');
+
+        // 检查是否有状态参数和成功标志
+        if (params.state && params.success === 'true') {
+            // 登录成功，等待父窗口轮询获取状态
+            setTimeout(() => {
+                spinner.style.display = 'none';
+                messageElement.textContent = '登录成功！正在返回应用程序...';
+                closeBtn.style.display = 'inline-block';
+                
+                // 尝试通知主应用程序
+                try {
+                    if (window.opener) {
+                        // 如果是通过window.open打开的
+                        window.opener.postMessage({
+                            type: 'GOOGLE_AUTH_SUCCESS',
+                            state: params.state
+                        }, '*');
+                    } else if (window.parent && window.parent !== window) {
+                        // 如果是在iframe中打开的
+                        window.parent.postMessage({
+                            type: 'GOOGLE_AUTH_SUCCESS',
+                            state: params.state
+                        }, '*');
+                    }
+                } catch (e) {
+                    console.error('Failed to notify parent window:', e);
+                }
+                
+                // 自动关闭窗口
+                setTimeout(() => {
+                    window.close();
+                }, 3000);
+            }, 1000);
+        } else if (params.error) {
+            // 登录出错
+            spinner.style.display = 'none';
+            messageElement.textContent = getErrorMessage(params.error);
+            messageElement.className = 'message error';
+            closeBtn.style.display = 'inline-block';
+        } else {
+            // 既不是成功也不是错误，显示默认消息
+            messageElement.textContent = '等待登录完成...';
+        }
+
+        // 根据错误类型返回友好的错误消息
+        function getErrorMessage(errorType) {
+            const errorMessages = {
+                'invalid_state': '无效的认证状态，请重试。',
+                'expired_state': '认证已过期，请重新开始登录。',
+                'token_exchange_failed': '无法获取认证令牌，请重试。',
+                'missing_token': '认证令牌获取失败，请重试。',
+                'user_info_failed': '无法获取用户信息，请重试。',
+                'callback_failed': '认证过程中发生错误，请重试。'
+            };
+            
+            return errorMessages[errorType] || '登录过程中发生未知错误。';
+        }
+
+        // 关闭按钮点击事件
+        closeBtn.addEventListener('click', function() {
+            window.close();
+        });
+
+        // 监听来自主窗口的消息
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'CLOSE_WINDOW') {
+                window.close();
+            }
+        });
+    </script>
+</body>
+</html>

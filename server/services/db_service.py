@@ -7,6 +7,7 @@ from .config_service import USER_DATA_DIR
 from .migrations.manager import MigrationManager, CURRENT_VERSION
 
 DB_PATH = os.path.join(USER_DATA_DIR, "localmanus.db")
+import uuid
 
 class DatabaseService:
     def __init__(self):
@@ -210,6 +211,32 @@ class DatabaseService:
             cursor = await db.execute("SELECT id, name, description, api_json, inputs, outputs FROM comfy_workflows ORDER BY id DESC")
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
+
+    async def save_message(self, session_id: str, message: Dict[str, Any], canvas_id: Optional[str] = None) -> int:
+        """Save a single message to the database
+
+        Args:
+            session_id: The chat session ID
+            message: The message to save
+            canvas_id: Optional canvas ID
+
+        Returns:
+            The ID of the last saved message
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            # Ensure message contains necessary fields
+            if 'role' in message and ('content' in message or 'tool_calls' in message):
+                await db.execute(
+                    "INSERT INTO chat_messages (session_id, role, message) VALUES (?, ?, ?)",
+                    (session_id, message['role'], json.dumps(message))
+                )
+                await db.commit()
+                
+                # Get the last inserted row ID
+                cursor = await db.execute("SELECT last_insert_rowid()")
+                result = await cursor.fetchone()
+                return result[0] if result else 0
+            return 0
 
     async def delete_comfy_workflow(self, id: int):
         """Delete a comfy workflow"""
@@ -515,6 +542,82 @@ class DatabaseService:
             
             # Return the updated template
             return await self.get_template(template_id)
+
+    async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Get user by email"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute("""
+                SELECT id, email, nickname, ctime, mtime, points, uuid, level, subscription_id, order_id
+                FROM users
+                WHERE email = ?
+            """, (email,))
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def get_user_by_uuid(self, user_uuid: str) -> Optional[Dict[str, Any]]:
+        """Get user by UUID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            cursor = await db.execute("""
+                SELECT id, email, nickname, ctime, mtime, points, uuid, level, subscription_id, order_id
+                FROM users
+                WHERE uuid = ?
+            """, (user_uuid,))
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    async def create_or_update_user(self, user_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Create or update user information"""
+        # 检查用户是否已存在
+        existing_user = await self.get_user_by_email(user_info.get('email'))
+        
+        async with aiosqlite.connect(self.db_path) as db:
+            if existing_user:
+                # 更新现有用户
+                update_fields = ["nickname = ?", "mtime = STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')"]
+                params = [user_info.get('username', existing_user['nickname'])]
+                
+                # 只更新提供了值的字段
+                if 'uuid' in user_info:
+                    update_fields.append("uuid = ?")
+                    params.append(user_info['uuid'])
+                if 'points' in user_info:
+                    update_fields.append("points = ?")
+                    params.append(user_info['points'])
+                if 'level' in user_info:
+                    update_fields.append("level = ?")
+                    params.append(user_info['level'])
+                
+                params.append(existing_user['id'])
+                
+                await db.execute(
+                    f"UPDATE users SET {', '.join(update_fields)} WHERE id = ?",
+                    params
+                )
+                await db.commit()
+                
+                # 返回更新后的用户信息
+                return await self.get_user_by_email(user_info.get('email'))
+            else:
+                # 创建新用户
+                user_uuid = user_info.get('uuid', str(uuid.uuid4()))
+                nickname = user_info.get('username', user_info.get('email').split('@')[0])
+                
+                await db.execute("""
+                    INSERT INTO users (email, nickname, ctime, mtime, points, uuid, level)
+                    VALUES (?, ?, STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'), STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'), ?, ?, ?)
+                """, (
+                    user_info.get('email'),
+                    nickname,
+                    user_info.get('points', 1000),
+                    user_uuid,
+                    user_info.get('level', 'free')
+                ))
+                await db.commit()
+                
+                # 返回新创建的用户信息
+                return await self.get_user_by_email(user_info.get('email'))
 
 # Create a singleton instance
 db_service = DatabaseService()

@@ -93,6 +93,34 @@ const PROVIDER_OPTIONS = [
     },
   },
   {
+    value: 'google',
+    label: 'google',
+    data: {
+      apiUrl: 'https://generativelanguage.googleapis.com',
+      models: {
+        'gemini-2.5-flash-image': { 'type': 'image' },
+        'gemini-2.5-pro-all': { 'type': 'text' },
+        'gemini-2.0-flash': { 'type': 'text' },
+        'gemini-2.5-flash': { 'type': 'text' },
+        'gemini-2.5-pro': { 'type': 'text' },
+      },
+    },
+  },
+  {
+    value: 'google_nano',
+    label: 'google_nano',
+    data: {
+      apiUrl: 'https://api.tu-zi.com/v1',
+      models: {
+        'gemini-2.5-flash-image': { 'type': 'image' },
+        'gemini-2.5-pro-all': { 'type': 'text' },
+        'gemini-2.0-flash': { 'type': 'text' },
+        'gemini-2.5-flash': { 'type': 'text' },
+        'gemini-2.5-pro': { 'type': 'text' },
+      },
+    },
+  },
+  {
     value: 'GoogleVertex',
     label: 'GoogleVertex',
     data: {
@@ -200,9 +228,9 @@ export default function AddProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <CommonDialogContent open={open}>
+      <CommonDialogContent open={open} ariaLabelledby="add-provider-dialog-title">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle id="add-provider-dialog-title">
             {t('settings:provider.addProvider')}
             {isMediaOnlyProvider && <span className="ml-3">🎨 🎥</span>}
           </DialogTitle>

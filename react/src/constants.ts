@@ -2,47 +2,47 @@ import type { LLMConfig, ToolCallFunctionName } from '@/types/types'
 
 // API Configuration
 export const BASE_API_URL =
-  import.meta.env.VITE_JAAZ_BASE_API_URL || 'https://jaaz.app'
+  import.meta.env.VITE_JAAZ_BASE_API_URL || 'http://127.0.0.1:57988'
 
 export const PROVIDER_NAME_MAPPING: {
   [key: string]: { name: string; icon: string }
 } = {
   jaaz: {
     name: 'Jaaz',
-    icon: 'https://raw.githubusercontent.com/11cafe/jaaz/refs/heads/main/assets/icons/jaaz.png',
+    icon: `${BASE_API_URL}/static/llm_icon/jaaz.png`,
   },
   anthropic: {
     name: 'Claude',
-    icon: 'https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/dark/claude-color.png',
+    icon: `${BASE_API_URL}/static/llm_icon/claude-color.png`,
   },
-  openai: { name: 'OpenAI', icon: 'https://openai.com/favicon.ico' },
+  openai: { name: 'OpenAI', icon: `${BASE_API_URL}/static/llm_icon/openai.png` },
   replicate: {
     name: 'Replicate',
-    icon: 'https://images.seeklogo.com/logo-png/61/1/replicate-icon-logo-png_seeklogo-611690.png',
+    icon: `${BASE_API_URL}/static/llm_icon/replicate.png`,
   },
   ollama: {
     name: 'Ollama',
-    icon: 'https://images.seeklogo.com/logo-png/59/1/ollama-logo-png_seeklogo-593420.png',
+    icon: `${BASE_API_URL}/static/llm_icon/ollama.png`,
   },
   huggingface: {
     name: 'Hugging Face',
-    icon: 'https://huggingface.co/favicon.ico',
+    icon: `${BASE_API_URL}/static/llm_icon/huggingface.png`,
   },
   wavespeed: {
     name: 'WaveSpeedAi',
-    icon: 'https://www.wavespeed.ai/favicon.ico',
+    icon: `${BASE_API_URL}/static/llm_icon/wavespeed.png`,
   },
   volces: {
     name: 'Volces',
-    icon: 'https://portal.volccdn.com/obj/volcfe/misc/favicon.png',
+    icon: `${BASE_API_URL}/static/llm_icon/volces.png`,
   },
   comfyui: {
     name: 'ComfyUI',
-    icon: 'https://framerusercontent.com/images/3cNQMWKzIhIrQ5KErBm7dSmbd2w.png',
+    icon: `${BASE_API_URL}/static/llm_icon/comfyui.png`,
   },
   google: {
     name: 'Google',
-    icon: 'https://www.gstatic.com/aistudio/ai_studio_favicon_2_32x32.png',
+    icon: `${BASE_API_URL}/static/llm_icon/google.png`,
   },
   doubao: {
     name: 'Doubao',
@@ -50,7 +50,15 @@ export const PROVIDER_NAME_MAPPING: {
   },
   googlevertex: {
     name: 'Vertex',
-    icon: 'https://images.seeklogo.com/logo-png/52/1/vertex-ai-logo-png_seeklogo-523075.png',
+    icon: `${BASE_API_URL}/static/llm_icon/vertex.png`,
+  },
+  google_nano: {
+    name: 'Google Nano',
+    icon: `${BASE_API_URL}/static/llm_icon/google_nano.png`,
+  },
+  siliconflow: {
+    name: 'siliconflow',
+    icon: `${BASE_API_URL}/static/llm_icon/siliconflow.png`,
   },
 }
 

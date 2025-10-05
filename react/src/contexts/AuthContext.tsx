@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useState, useEffect, useContext } from 'react'
 import { toast } from 'sonner'
 import { AuthStatus, getAuthStatus } from '../api/auth'
 
@@ -37,9 +37,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // 初始化时获取认证状态
   useEffect(() => {
     refreshAuth()
   }, [])
+
+  // 监听认证状态变化事件，确保UI能立即更新
+  useEffect(() => {
+    const handleAuthStatusUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const source = customEvent.detail?.source || 'unknown'
+      const authStatus = customEvent.detail?.authStatus
+      
+      console.log(`🔄 AuthContext: 检测到认证状态更新事件 (来源: ${source})`)
+      
+      // 如果事件中已经包含认证状态信息，直接使用，避免额外的API调用
+      if (authStatus) {
+        console.log('🔄 使用事件中提供的认证状态直接更新UI')
+        setAuthStatus(authStatus)
+        setIsLoading(false)
+      } else {
+        // 否则，调用refreshAuth刷新认证状态
+        console.log('🔄 调用refreshAuth刷新认证状态')
+        refreshAuth()
+      }
+    }
+
+    const handleAuthLogoutDetected = (event: Event) => {
+      const customEvent = event as CustomEvent
+      const source = customEvent.detail?.source || 'unknown'
+      console.log(`🚪 AuthContext: 检测到登出事件 (来源: ${source})，刷新认证状态...`)
+      refreshAuth()
+    }
+
+    // 添加事件监听器
+    window.addEventListener('auth-status-updated', handleAuthStatusUpdated)
+    window.addEventListener('auth-logout-detected', handleAuthLogoutDetected)
+
+    // 清理事件监听器
+    return () => {
+      window.removeEventListener('auth-status-updated', handleAuthStatusUpdated)
+      window.removeEventListener('auth-logout-detected', handleAuthLogoutDetected)
+    }
+  }, [refreshAuth])
 
   return (
     <AuthContext.Provider value={{ authStatus, isLoading, refreshAuth }}>

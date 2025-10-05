@@ -105,8 +105,8 @@ def _ensure_registry_initialized():
         initialize_registry()
 
 
-# 在模块导入时立即执行懒加载，但不执行注册表初始化
-_lazy_import_registry()
+# 不在模块级别立即执行懒加载，改为在实际使用前才导入
+# 这样可以避免循环依赖问题
 
 
 # 辅助函数：根据用户选择创建并执行魔法任务

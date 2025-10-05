@@ -1,5 +1,5 @@
-import { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { create } from 'zustand'
+import { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 
 type CanvasStore = {
   canvasId: string

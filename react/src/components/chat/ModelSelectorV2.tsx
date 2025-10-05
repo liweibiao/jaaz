@@ -108,7 +108,7 @@ const ModelSelector: React.FC = () => {
   return (
     <>
       <Select
-        value={textModel?.provider + ':' + textModel?.model}
+        value={textModel ? textModel.provider + ':' + textModel.model : undefined}
         onValueChange={(value) => {
           localStorage.setItem('text_model', value)
           setTextModel(

@@ -27,76 +27,41 @@ class HttpClient:
         
         # 线程池用于异步执行同步请求
         self.executor = ThreadPoolExecutor(max_workers=10)
-        
-        # 加载设置服务以获取提供商代理配置
-        self.settings_service = None
-        
-        # 延迟加载settings_service以避免循环导入
-        self._load_settings_service()
 
-    def _load_settings_service(self):
-        """延迟加载设置服务"""
-        try:
-            from services.settings_service import get_settings_service
-            self.settings_service = get_settings_service()
-        except Exception as e:
-            logger.warning(f"Failed to load settings service: {e}")
-
-    def get_provider_proxy_enabled(self, provider_key: str) -> bool:
-        """检查特定提供商是否启用了代理"""
-        if not self.settings_service:
-            self._load_settings_service()
-        
-        if not self.settings_service:
-            logger.warning(f"Settings service not available, using default proxy behavior")
-            return True  # 默认情况下应用代理
-        
-        try:
-            return self.settings_service.get_provider_proxy_enabled(provider_key)
-        except Exception as e:
-            logger.error(f"Error checking provider proxy setting: {e}")
-            return True  # 出错时默认应用代理
-
-    def get_client_kwargs(self, provider_key: Optional[str] = None, **kwargs) -> Dict[str, Any]:
-        """构建客户端配置参数，支持根据提供商设置代理"""
+    def get_client_kwargs(self, provider_key: Optional[str] = None, is_async: bool = False, **kwargs) -> Dict[str, Any]:
+        """构建客户端配置参数，直接设置代理地址"""
         # 基础配置
         client_kwargs = {
-            "timeout": kwargs.get("timeout", 30),
+            "timeout": kwargs.get("timeout", 300),
             "follow_redirects": kwargs.get("follow_redirects", True),
             "max_redirects": kwargs.get("max_redirects", 10),
+            "verify": kwargs.get("verify", ssl_context),
         }
         
-        # 代理配置
-        use_proxy = True
+        # 直接设置代理地址，与jaaz2保持一致
+        proxy_url = 'http://127.0.0.1:1080'
         
-        # 如果指定了提供商，检查是否启用了代理
-        if provider_key:
-            use_proxy = self.get_provider_proxy_enabled(provider_key)
-        
-        # 根据设置决定是否使用系统环境变量中的代理
-        client_kwargs["trust_env"] = use_proxy
-        
-        # 如果明确指定了代理URL，覆盖环境变量
+        # 如果明确指定了proxy参数，使用指定的代理
         if "proxy" in kwargs:
+            if kwargs["proxy"] is None:
+                # 明确禁用代理
+                logger.debug("Proxy explicitly disabled")
+                return client_kwargs
             proxy_url = kwargs["proxy"]
-            client_kwargs["proxies"] = {
-                "http://": proxy_url,
-                "https://": proxy_url,
-            }
-            client_kwargs["trust_env"] = False  # 使用明确的代理URL时不读取环境变量
         
-        # SSL配置
-        client_kwargs["verify"] = kwargs.get("verify", ssl_context)
+        # 设置代理参数 - httpx.Client和AsyncClient都使用proxy参数
+        client_kwargs["proxy"] = proxy_url
         
         # 自定义headers
         if "headers" in kwargs:
             client_kwargs["headers"] = kwargs["headers"]
         
+        logger.debug(f"Final client kwargs: proxy={client_kwargs.get('proxy')}")
         return client_kwargs
 
     def create_httpx_client(self, provider_key: Optional[str] = None, **kwargs) -> httpx.Client:
         """创建同步HTTP客户端"""
-        client_kwargs = self.get_client_kwargs(provider_key=provider_key, **kwargs)
+        client_kwargs = self.get_client_kwargs(provider_key=provider_key, is_async=False, **kwargs)
         
         # 连接池配置
         limits = httpx.Limits(
@@ -109,13 +74,13 @@ class HttpClient:
         # 创建客户端
         client = httpx.Client(**client_kwargs)
         
-        logger.debug(f"Created httpx client with provider_key={provider_key}, trust_env={client_kwargs['trust_env']}")
+        logger.debug(f"Created httpx client with provider_key={provider_key}, proxy={client_kwargs.get('proxy')}")
         
         return client
 
     def create_async_httpx_client(self, provider_key: Optional[str] = None, **kwargs) -> httpx.AsyncClient:
         """创建异步HTTP客户端"""
-        client_kwargs = self.get_client_kwargs(provider_key=provider_key, **kwargs)
+        client_kwargs = self.get_client_kwargs(provider_key=provider_key, is_async=True, **kwargs)
         
         # 连接池配置
         limits = httpx.Limits(
@@ -128,32 +93,36 @@ class HttpClient:
         # 创建异步客户端
         client = httpx.AsyncClient(**client_kwargs)
         
-        logger.debug(f"Created async httpx client with provider_key={provider_key}, trust_env={client_kwargs['trust_env']}")
+        logger.debug(f"Created async httpx client with provider_key={provider_key}, proxy={client_kwargs.get('proxy')}")
         
         return client
 
     def create_aiohttp_client_session(self, provider_key: Optional[str] = None, **kwargs) -> aiohttp.ClientSession:
-        """创建aiohttp客户端会话"""
+        """创建aiohttp客户端会话，与jaaz2保持一致的配置"""
         # 基础配置
         session_kwargs = {
-            "timeout": aiohttp.ClientTimeout(total=kwargs.get("timeout", 30)),
-            "trust_env": True,  # 默认使用系统环境变量中的代理
+            "timeout": aiohttp.ClientTimeout(total=kwargs.get("timeout", 300)),
+            "trust_env": True,  # 启用环境变量代理支持
+            # 直接设置代理地址，与jaaz2保持一致
+            "proxy": 'http://127.0.0.1:1080',
         }
         
-        # 检查提供商是否启用了代理
-        if provider_key:
-            use_proxy = self.get_provider_proxy_enabled(provider_key)
-            session_kwargs["trust_env"] = use_proxy
-        
-        # 如果明确指定了代理URL，覆盖环境变量
+        # 如果明确指定了proxy参数，使用指定的代理
         if "proxy" in kwargs:
-            proxy_url = kwargs["proxy"]
-            session_kwargs["connector"] = aiohttp.TCPConnector(
-                ssl=ssl_context,
-                limit=self.max_connections,
-                limit_per_host=self.max_keepalive_connections,
-            )
-            session_kwargs["trust_env"] = False  # 使用明确的代理URL时不读取环境变量
+            if kwargs["proxy"] is None:
+                # 明确禁用代理
+                logger.debug("Proxy explicitly disabled")
+                session_kwargs.pop("proxy", None)
+            else:
+                session_kwargs["proxy"] = kwargs["proxy"]
+        
+        # 创建TCPConnector
+        session_kwargs["connector"] = aiohttp.TCPConnector(
+            ssl=ssl_context,
+            limit=self.max_connections,
+            limit_per_host=self.max_keepalive_connections,
+            keepalive_timeout=0,
+        )
         
         # SSL配置
         if "verify" in kwargs and not kwargs["verify"]:
@@ -162,7 +131,7 @@ class HttpClient:
         # 创建会话
         session = aiohttp.ClientSession(**session_kwargs)
         
-        logger.debug(f"Created aiohttp client session with provider_key={provider_key}, trust_env={session_kwargs['trust_env']}")
+        logger.debug(f"Created aiohttp client session with provider_key={provider_key}, proxy={session_kwargs.get('proxy')}")
         
         return session
 
@@ -184,9 +153,15 @@ class HttpClient:
 
     async def async_request(self, method: str, url: str, provider_key: Optional[str] = None, **kwargs) -> httpx.Response:
         """发送异步HTTP请求"""
+        # 创建一个副本以避免修改原始kwargs
+        request_kwargs = kwargs.copy()
+        # 移除可能导致问题的proxy参数，因为它已经在create_async_httpx_client中处理
+        request_kwargs.pop("proxy", None)
+        request_kwargs.pop("proxies", None)
+        
         async with self.create_async_httpx_client(provider_key=provider_key, **kwargs) as client:
             try:
-                response = await client.request(method, url, **kwargs)
+                response = await client.request(method, url, **request_kwargs)
                 response.raise_for_status()
                 return response
             except httpx.HTTPError as e:

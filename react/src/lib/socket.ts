@@ -29,28 +29,13 @@ export class SocketIOManager {
       }
 
       this.socket = io(url, {
-        // 添加多种传输方式以增加连接成功率
-        transports: ['websocket', 'polling'],
-        // 允许从polling升级到websocket
-        upgrade: true,
-        // 启用重连机制
+        transports: ['websocket', 'polling'],  // 增加 polling 作为备选传输方式
+        upgrade: true,  // 允许升级传输方式
         reconnection: true,
-        // 增加最大重连次数
         reconnectionAttempts: this.maxReconnectAttempts,
-        // 设置初始重连延迟
         reconnectionDelay: this.reconnectDelay,
-        // 重连延迟最大值（毫秒）
-        reconnectionDelayMax: 5000,
-        // 强制新连接（防止缓存问题）
-        forceNew: true,
-        // 超时时间（毫秒）
-        timeout: 20000,
-        // 允许自签名证书（在开发环境中很有用）
-        rejectUnauthorized: process.env.NODE_ENV === 'production',
-        // 配置路径
-        path: '/socket.io',
-        // 添加withCredentials以支持跨域会话
-        withCredentials: true
+        reconnectionDelayMax: 5000,  // 最大重连延迟5秒
+        timeout: 20000,  // 连接超时时间20秒
       })
 
       this.socket.on('connect', () => {
@@ -62,14 +47,13 @@ export class SocketIOManager {
 
       this.socket.on('connect_error', (error) => {
         console.error('❌ Socket.IO connection error:', error)
-        console.log('🔌 Connection attempt:', this.reconnectAttempts + 1)
         this.connected = false
         this.reconnectAttempts++
 
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
           reject(
             new Error(
-              `Failed to connect after ${this.maxReconnectAttempts} attempts. Check your network connection or server status.`
+              `Failed to connect after ${this.maxReconnectAttempts} attempts`
             )
           )
         }

@@ -3,14 +3,12 @@ from fastapi import APIRouter
 import requests
 import httpx
 from models.tool_model import ToolInfoJson
-from services.tool_service import tool_service
 from services.config_service import config_service
 from services.db_service import db_service
 from utils.http_client import HttpClient
 # services
 from models.config_model import ModelInfo
 from typing import List
-from services.tool_service import TOOL_MAPPING
 
 router = APIRouter(prefix="/api")
 
@@ -96,6 +94,8 @@ async def get_models() -> list[ModelInfo]:
 
 @router.get("/list_tools")
 async def list_tools() -> list[ToolInfoJson]:
+    # 延迟导入以避免循环依赖
+    from services.tool_service import tool_service
     config = config_service.get_config()
     res: list[ToolInfoJson] = []
     for tool_id, tool_info in tool_service.tools.items():

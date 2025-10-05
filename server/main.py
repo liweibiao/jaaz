@@ -1,5 +1,5 @@
-import os
 import sys
+import os
 import io
 # Ensure stdout and stderr use utf-8 encoding to prevent emoji logs from crashing python server
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -7,7 +7,7 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 print('Importing websocket_router')
 from routers.websocket_router import *  # DO NOT DELETE THIS LINE, OTHERWISE, WEBSOCKET WILL NOT WORK
 print('Importing routers')
-from routers import config_router, image_router, root_router, workspace, canvas, ssl_test, chat_router, settings, tool_confirmation, templates_router, file_router
+from routers import config_router, image_router, root_router, workspace, canvas, ssl_test, chat_router, settings, tool_confirmation, templates_router, file_router, auth_router, billing_router
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI
@@ -50,7 +50,7 @@ app = FastAPI(lifespan=lifespan)
 # 添加CORS中间件配置，允许所有源访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有源访问
+    allow_origins=["http://localhost:5174", "http://127.0.0.1:5174"],  # 允许特定的前端源访问
     allow_credentials=True,
     allow_methods=["*"],  # 允许所有HTTP方法
     allow_headers=["*"],  # 允许所有HTTP头部
@@ -58,17 +58,19 @@ app.add_middleware(
 
 # Include routers
 print('Including routers')
-app.include_router(config_router.router)
-app.include_router(settings.router)
-app.include_router(root_router.router)
-app.include_router(canvas.router)
-app.include_router(workspace.router)
-app.include_router(image_router.router)
-app.include_router(ssl_test.router)
-app.include_router(chat_router.router)
-app.include_router(tool_confirmation.router)
-app.include_router(templates_router.router)
-app.include_router(file_router.router)
+app.include_router(config_router)
+app.include_router(settings)
+app.include_router(root_router)
+app.include_router(canvas)
+app.include_router(workspace)
+app.include_router(image_router)
+app.include_router(ssl_test)
+app.include_router(chat_router)
+app.include_router(tool_confirmation)
+app.include_router(templates_router)
+app.include_router(file_router)
+app.include_router(auth_router)
+app.include_router(billing_router)
 
 # Mount the React build directory
 react_build_dir = os.environ.get('UI_DIST_DIR', os.path.join(
@@ -89,6 +91,11 @@ class NoCacheStaticFiles(StaticFiles):
 static_site = os.path.join(react_build_dir, "assets")
 if os.path.exists(static_site):
     app.mount("/assets", NoCacheStaticFiles(directory=static_site), name="assets")
+
+# Mount the server static directory
+server_static_dir = os.path.join(root_dir, "static")
+if os.path.exists(server_static_dir):
+    app.mount("/static", StaticFiles(directory=server_static_dir), name="server_static")
 
 
 @app.get("/")

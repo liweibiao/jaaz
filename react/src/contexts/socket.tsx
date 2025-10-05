@@ -41,21 +41,26 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         // Create socket manager instance if not exists
         if (!socketManagerRef.current) {
           // 优先从环境变量获取API URL，其次从配置文件获取，最后使用默认值
-          const getServerUrl = () => {
-            // 检查是否有环境变量配置的API URL
-            if (import.meta.env.VITE_API_URL) {
-              return import.meta.env.VITE_API_URL.replace(/\/api$/, '');
-            }
-            
-            // 尝试从localStorage获取配置的后端URL
-            const backendUrl = localStorage.getItem('backendUrl');
-            if (backendUrl) {
-              return backendUrl;
-            }
-            
-            // 默认值：开发环境使用当前页面origin，生产环境也使用当前页面origin
-            return window.location.origin;
-          };
+            const getServerUrl = () => {
+              // 检查是否有环境变量配置的API URL
+              if (import.meta.env.VITE_API_URL) {
+                return import.meta.env.VITE_API_URL.replace(/\/api$/, '');
+              }
+              
+              // 尝试从localStorage获取配置的后端URL
+              const backendUrl = localStorage.getItem('backendUrl');
+              if (backendUrl) {
+                return backendUrl;
+              }
+              
+              // 开发环境使用固定的后端地址，确保与Vite配置一致
+              if (import.meta.env.DEV) {
+                return 'http://127.0.0.1:57988';
+              }
+              
+              // 生产环境使用当前页面origin
+              return window.location.origin;
+            };
           
           socketManagerRef.current = new SocketIOManager({
             serverUrl: getServerUrl(),

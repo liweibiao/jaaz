@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { ConfigsProvider } from '@/contexts/configs'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { useTheme } from '@/hooks/use-theme'
+import { checkDirectAuthParams } from '@/api/auth'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister'
@@ -66,6 +67,24 @@ const queryClient = new QueryClient({
 
 function App() {
   const { theme } = useTheme()
+
+  // 检查URL中的认证参数，处理Google登录后的回调
+  useEffect(() => {
+    console.log('🔍 App initializing: checking for direct auth params...')
+    
+    // 检查URL中的认证参数
+    const result = checkDirectAuthParams()
+    
+    if (result.authSuccess && result.authData) {
+      console.log('✅ Authentication success detected from URL params')
+      // 认证成功，不需要额外操作，因为checkDirectAuthParams已经保存了认证数据并触发了auth-status-updated事件
+    } else if (result.authError) {
+      console.error('❌ Authentication error detected:', result.authError)
+      // 可以在这里显示错误消息
+    }
+    
+    console.log('✅ Direct auth params check completed')
+  }, [])
 
   // Auto-start ComfyUI on app startup
   useEffect(() => {

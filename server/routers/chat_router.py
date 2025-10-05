@@ -1,7 +1,5 @@
 #server/routers/chat_router.py
 from fastapi import APIRouter, Request
-from services.chat_service import handle_chat
-from services.magic_service import handle_magic
 from services.stream_service import get_stream_task
 from typing import Dict
 
@@ -22,6 +20,8 @@ async def chat(request: Request):
         {"status": "done"}
     """
     data = await request.json()
+    # 延迟导入以避免循环依赖
+    from services.chat_service import handle_chat
     await handle_chat(data)
     return {"status": "done"}
 
@@ -60,6 +60,8 @@ async def magic(request: Request):
         {"status": "done"}
     """
     data = await request.json()
+    # 延迟导入以避免循环依赖
+    from services.magic_service import handle_magic
     await handle_magic(data)
     return {"status": "done"}
 

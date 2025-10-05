@@ -70,6 +70,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // 使用消息ID而不是索引来存储选中的消息
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([])
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isDeletingMode, setIsDeletingMode] = useState(false)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -160,7 +161,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               last.content.at(-1) &&
               last.content.at(-1)!.type === 'text'
             ) {
-              ;(last.content.at(-1) as { text: string }).text += data.text
+              ; (last.content.at(-1) as { text: string }).text += data.text
             }
           } else {
             prev.push({
@@ -415,11 +416,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         return
       }
 
-      setMessages(() => {
-        console.log('👇all_messages', data.messages)
-        return data.messages
-      })
-      setMessages(mergeToolCallResult(data.messages))
+      // 先合并工具调用结果，然后一次性设置消息状态
+      const mergedMessages = mergeToolCallResult(data.messages)
+      setMessages(mergedMessages)
       scrollToBottom()
     },
     [sessionId, scrollToBottom]
@@ -446,7 +445,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setPending(false)
     toast.error('Error: ' + data.error, {
       closeButton: true,
-      duration: 3600 * 1000,
+      duration: 10 * 1000,
       style: { color: 'red' },
     })
   }, [])
@@ -549,6 +548,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }, 300)
 
     scrollToBottom()
+    
+    // 无论是否有消息，都将initCanvas设置为false，确保pending状态正确重置
+    setInitCanvas(false)
   }, [sessionId, scrollToBottom, setInitCanvas, eventBus])
 
   useEffect(() => {
@@ -578,10 +580,68 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     onSelectSession(newSession.id)
   }
 
+  // 轮询检查消息更新的函数
+  const pollForMessageUpdates = useCallback(async (sessionId: string, startTime: number) => {
+    const MAX_POLL_TIME = 60000; // 最大轮询时间60秒
+    const POLL_INTERVAL = 5000; // 增加轮询间隔到5秒，减少请求频率
+
+    // 检查是否超过最大轮询时间或已经收到Done事件
+    if (Date.now() - startTime > MAX_POLL_TIME || doneRef.current) {
+      console.log('Polling stopped after maximum duration or Done event received');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/chat_session/${sessionId}`);
+      const messages = await response.json();
+
+      // 如果有新消息（消息数量增加或最后一条消息不是用户发送的）
+      if (messages && messages.length > 0) {
+        const latestMessage = messages[messages.length - 1];
+        const currentMessages = messagesRef.current;
+
+        // 检查是否有新的助手回复
+        if (latestMessage.role === 'assistant' &&
+          (!currentMessages ||
+            !currentMessages.length ||
+            currentMessages[currentMessages.length - 1].id !== latestMessage.id)) {
+
+          // 更新消息列表
+          const mergedMessages = mergeToolCallResult(messages);
+          setMessages(mergedMessages);
+          messagesRef.current = mergedMessages;
+          setPending(false);
+          scrollToBottom();
+          return; // 收到新消息后停止轮询
+        }
+      }
+
+      // 继续轮询，但使用递增的间隔时间，避免请求过于频繁
+      const nextInterval = Math.min(POLL_INTERVAL + Math.floor((Date.now() - startTime) / 10000) * 1000, 10000); // 最大10秒
+      setTimeout(() => pollForMessageUpdates(sessionId, startTime), nextInterval);
+    } catch (error) {
+      console.error('Polling for message updates failed:', error);
+      // 发生错误时增加轮询间隔，避免在网络问题时频繁请求
+      setTimeout(() => pollForMessageUpdates(sessionId, startTime), POLL_INTERVAL * 2);
+    }
+  }, [scrollToBottom]);
+
+  // 用于存储当前消息状态的引用
+  const messagesRef = useRef<Message[]>([]);
+
+  // 用于标记会话是否已完成的引用
+  const doneRef = useRef<boolean>(false);
+
+  // 监听消息变化，更新引用
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   const onSendMessages = useCallback(
     async (data: Message[], configs: { textModel: Model; toolList: ToolInfo[] }) => {
       setPending('text')
       setMessages(data)
+      messagesRef.current = data; // 更新引用
 
       try {
         await sendMessages({
@@ -603,6 +663,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         }
 
         scrollToBottom()
+
+        // 启动轮询作为WebSocket的备选方案
+        const startTime = Date.now();
+        pollForMessageUpdates(sessionId!, startTime);
+
+        // 添加超时机制，防止pending状态一直保持
+        const pendingTimeout = setTimeout(() => {
+          setPending(false)
+          console.log('Message timeout: Resetting pending state')
+        }, 30000); // 30秒超时
+
+        // 定义一次性事件处理函数
+        const handleDoneEvent = () => {
+          clearTimeout(pendingTimeout);
+          eventBus.off('Socket::Session::Done', handleDoneEvent);
+          // 标记为已完成，停止轮询
+          doneRef.current = true;
+        };
+
+        // 添加事件监听器
+        eventBus.on('Socket::Session::Done', handleDoneEvent);
+
+        // 初始化done状态引用
+        doneRef.current = false;
       } catch (error) {
         console.error('Failed to send messages:', error)
         // 在API调用失败时重置pending状态
@@ -613,7 +697,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         })
       }
     },
-    [canvasId, sessionId, searchSessionId, scrollToBottom]
+    [canvasId, sessionId, searchSessionId, scrollToBottom, pollForMessageUpdates]
   )
 
   const handleCancelChat = useCallback(async () => {
@@ -638,38 +722,38 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleMessageClick = useCallback((message: Message, index: number, e?: React.MouseEvent) => {
     // 防止事件冒泡影响其他交互
     e?.stopPropagation();
-    
+
     // 确保消息有id，没有则生成临时id
     const messageId = message.id || `temp-${nanoid()}`;
-    
-    setSelectedMessageIds(prev => {
-      const newSelection = e?.ctrlKey || e?.metaKey
-        ? prev.includes(messageId) 
-          ? prev.filter(id => id !== messageId) 
-          : [...prev, messageId]
-        : [messageId];
-      
-      // 注意：在useCallback中，selectedMessageIds是捕获的值，不会实时更新
-      // 所以这里不记录selectedMessageIds，而是在组件其他地方监控状态变化
-      return newSelection;
-    })
-  }, [])
+
+    if (isDeletingMode) {
+      setSelectedMessageIds(prev => {
+        const newSelection = e?.ctrlKey || e?.metaKey
+          ? prev.includes(messageId)
+            ? prev.filter(id => id !== messageId)
+            : [...prev, messageId]
+          : [messageId];
+
+        return newSelection;
+      })
+    }
+  }, [isDeletingMode])
 
   const handleDeleteMessages = useCallback(async () => {
     console.log('删除按钮被点击，开始处理删除操作');
-    
+
     // 先关闭对话框
     setShowDeleteDialog(false)
-    
+
     // 检查是否有选中的消息
     if (selectedMessageIds.length === 0) {
       console.warn('没有选中的消息')
       toast.warning('没有选中的消息')
       return
     }
-    
+
     console.log(`准备删除${selectedMessageIds.length}条消息，消息ID:`, selectedMessageIds)
-    
+
     try {
       // 获取要删除的消息信息
       const messagesToDelete = selectedMessageIds.map(messageId => {
@@ -681,9 +765,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           created_at: msg?.created_at || null
         };
       }).filter((msg): msg is { id: string; session_id: string; created_at: string | null } => msg !== undefined);
-      
+
       console.log('要删除的消息信息:', messagesToDelete)
-      
+
       // 如果有sessionId，先通知后端删除消息
       if (sessionId) {
         console.log(`向服务器发送删除请求，会话ID: ${sessionId}`)
@@ -694,19 +778,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           },
           body: JSON.stringify({ messages: messagesToDelete }),
         })
-        
+
         if (!response.ok) {
           console.error(`服务器响应错误: ${response.status}`)
           const errorText = await response.text()
           console.error('错误详情:', errorText)
           throw new Error(`服务器响应错误: ${response.status}`)
         }
-        
+
         const result = await response.json()
         console.log('服务器返回结果:', result)
         if (result.success) {
           console.log(`成功删除了${result.deleted_count}条消息`)
-          
+
           // 后端删除成功后，再更新前端消息状态
           const newMessages = messages.filter(msg => !selectedMessageIds.includes(msg.id || ''))
           setMessages(newMessages)
@@ -771,111 +855,121 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 // 确保消息有id，没有则生成临时id用于前端渲染
                 const messageId = message.id || `temp-${nanoid()}`;
                 return (
-                  <div 
+                  <div
                     key={messageId}
-                    className={`flex flex-col gap-4 mb-2 ${selectedMessageIds.includes(messageId) ? 'bg-primary/10 rounded-lg p-2' : ''}`}
+                    className={`flex gap-3 mb-2 ${selectedMessageIds.includes(messageId) ? 'bg-primary/10 rounded-lg p-2' : ''} relative`}
                     onClick={(e) => handleMessageClick(message, idx, e)}
                   >
-                    {/* 选择指示器 - 更明显的样式 */}
-                    {selectedMessageIds.includes(messageId) && (
-                      <div className='absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary flex items-center justify-center border border-primary-foreground shadow-sm z-10'>
-                        <div className='w-2 h-2 rounded-full bg-white'></div>
+                    {/* 圆形复选框 - 调整为并排显示 */}
+                    {isDeletingMode && (
+                      <div
+                        className={`flex-shrink-0 mt-2 w-4 h-4 rounded-full cursor-pointer flex items-center justify-center border-2 z-10 ${selectedMessageIds.includes(messageId) ? 'border-primary bg-primary' : 'border-border bg-background'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedMessageIds(prev =>
+                            prev.includes(messageId)
+                              ? prev.filter(id => id !== messageId)
+                              : [...prev, messageId]
+                          );
+                        }}
+                      >
+                        {selectedMessageIds.includes(messageId) && (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        )}
                       </div>
                     )}
-                    {/* 点击提示 */}
-                    {!selectedMessageIds.includes(messageId) && (
-                      <div className='absolute -right-2 top-2 text-xs text-muted-foreground opacity-50 pointer-events-none'>
-                        点击选择
-                      </div>
-                    )}
-                   
-                    {/* Regular message content */}
-                    {typeof message.content == 'string' &&
-                      (message.role !== 'tool' ? (
-                        <MessageRegular
-                          message={message}
-                          content={message.content || ''}
-                        />
-                      ) : message.tool_call_id &&
-                        mergedToolCallIds.current.includes(
-                          message.tool_call_id
-                        ) ? (
-                        <></>
-                      ) : (
-                        <ToolCallContent
-                          expandingToolCalls={expandingToolCalls}
-                          message={message}
-                        />
-                      ))}
 
-                    {/* 混合内容消息的文本部分 - 显示在聊天框内 */}
-                    {Array.isArray(message.content) && (
-                      <>
-                        <MixedContentImages
-                          contents={message.content}
-                        />
-                        <MixedContentText
-                          message={message}
-                          contents={message.content}
-                        />
-                      </>
-                    )}
-
-                    {message.role === 'assistant' &&
-                      message.tool_calls &&
-                      message.tool_calls.at(-1)?.function.name != 'finish' &&
-                      message.tool_calls.map((toolCall, i) => {
-                        return (
-                          <ToolCallTag
-                            key={toolCall.id}
-                            toolCall={toolCall}
-                            isExpanded={expandingToolCalls.includes(toolCall.id)}
-                            onToggleExpand={() => {
-                              if (expandingToolCalls.includes(toolCall.id)) {
-                                setExpandingToolCalls((prev) =>
-                                  prev.filter((id) => id !== toolCall.id)
-                                )
-                              } else {
-                                setExpandingToolCalls((prev) => [
-                                  ...prev,
-                                  toolCall.id,
-                                ])
-                              }
-                            }}
-                            requiresConfirmation={pendingToolConfirmations.includes(
-                              toolCall.id
-                            )}
-                            onConfirm={() => {
-                              // 发送确认事件到后端
-                              fetch('/api/tool_confirmation', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                  session_id: sessionId,
-                                  tool_call_id: toolCall.id,
-                                  confirmed: true,
-                                }),
-                              })
-                            }}
-                            onCancel={() => {
-                              // 发送取消事件到后端
-                              fetch('/api/tool_confirmation', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                  session_id: sessionId,
-                                  tool_call_id: toolCall.id,
-                                  confirmed: false,
-                                }),
-                              })
-                            }}
+                    <div className="flex-grow">
+                      {/* Regular message content */}
+                      {typeof message.content == 'string' &&
+                        (message.role !== 'tool' ? (
+                          <MessageRegular
+                            message={message}
+                            content={message.content || ''}
                           />
-                        );
-                      })}
+                        ) : message.tool_call_id &&
+                          mergedToolCallIds.current.includes(
+                            message.tool_call_id
+                          ) ? (
+                          <></>
+                        ) : (
+                          <ToolCallContent
+                            expandingToolCalls={expandingToolCalls}
+                            message={message}
+                          />
+                        ))}
+
+                      {/* 混合内容消息的文本部分 - 显示在聊天框内 */}
+                      {Array.isArray(message.content) && (
+                        <>
+                          <MixedContentImages
+                            contents={message.content}
+                          />
+                          <MixedContentText
+                            message={message}
+                            contents={message.content}
+                          />
+                        </>
+                      )}
+
+                      {message.role === 'assistant' &&
+                        message.tool_calls &&
+                        message.tool_calls.at(-1)?.function.name != 'finish' &&
+                        message.tool_calls.map((toolCall, i) => {
+                          return (
+                            <ToolCallTag
+                              key={toolCall.id}
+                              toolCall={toolCall}
+                              isExpanded={expandingToolCalls.includes(toolCall.id)}
+                              onToggleExpand={() => {
+                                if (expandingToolCalls.includes(toolCall.id)) {
+                                  setExpandingToolCalls((prev) =>
+                                    prev.filter((id) => id !== toolCall.id)
+                                  )
+                                } else {
+                                  setExpandingToolCalls((prev) => [
+                                    ...prev,
+                                    toolCall.id,
+                                  ])
+                                }
+                              }}
+                              requiresConfirmation={pendingToolConfirmations.includes(
+                                toolCall.id
+                              )}
+                              onConfirm={() => {
+                                // 发送确认事件到后端
+                                fetch('/api/tool_confirmation', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    session_id: sessionId,
+                                    tool_call_id: toolCall.id,
+                                    confirmed: true,
+                                  }),
+                                });
+                              }}
+                              onCancel={() => {
+                                // 发送取消事件到后端
+                                fetch('/api/tool_confirmation', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    session_id: sessionId,
+                                    tool_call_id: toolCall.id,
+                                    confirmed: false,
+                                  }),
+                                });
+                              }}
+                            />
+                          );
+                        })}
+                    </div>
                   </div>
                 );
               })}
@@ -903,31 +997,74 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </ScrollArea>
 
         <div className='p-2 gap-2 sticky bottom-0'>
-          {/* 删除选中消息按钮 */}
-              {selectedMessageIds.length > 0 && (
-                <div className='flex justify-between items-center mb-2 p-2 bg-background rounded-md border border-border shadow-sm'>
-                  <span className='text-sm font-medium text-foreground'>
-                    已选择 {selectedMessageIds.length} 条消息
-                  </span>
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    onClick={(e) => {e.stopPropagation(); setShowDeleteDialog(true); console.log('删除对话框已显示，选中的消息ID:', selectedMessageIds);}}
-                    className="flex items-center gap-1 px-3 hover:bg-destructive/90 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    删除
-                  </Button>
-                </div>
-              )}
-          
-          <ChatTextarea
-            sessionId={sessionId || ''}
-            pending={!!pending}
-            messages={messages}
-            onSendMessages={onSendMessages}
-            onCancelChat={handleCancelChat}
-          />
+          {/* 删除状态操作栏 */}
+          {isDeletingMode && (
+            <div className='flex items-center justify-between px-4 py-2 bg-background border border-border rounded-md shadow-sm mb-2'>
+              <div className='flex items-center gap-2'>
+                <span className='text-sm font-medium text-foreground'>
+                  已选择 {selectedMessageIds.length} 条消息
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); setShowDeleteDialog(true); }}
+                  disabled={selectedMessageIds.length === 0}
+                  className="flex items-center gap-1 px-3 hover:bg-destructive/90 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  删除所选
+                </Button>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDeletingMode(false);
+                  setSelectedMessageIds([]);
+                }}
+              >
+                退出删除模式
+              </Button>
+            </div>
+          )}
+
+          <div className='relative'>
+            <ChatTextarea
+              sessionId={sessionId || ''}
+              pending={!!pending}
+              messages={messages}
+              onSendMessages={onSendMessages}
+              onCancelChat={handleCancelChat}
+            />
+            {/* 删除模式切换按钮 */}
+            <button
+              className="absolute -top-10 right-4 p-1.5 text-muted-foreground hover:bg-muted rounded-full transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDeletingMode(!isDeletingMode);
+                if (isDeletingMode) {
+                  setSelectedMessageIds([]);
+                }
+              }}
+              title={isDeletingMode ? "退出删除模式" : "进入删除模式"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {isDeletingMode ? (
+                  <g>
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </g>
+                ) : (
+                  <g>
+                    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <path d="m21 15-5-5L5 21"></path>
+                  </g>
+                )}
+              </svg>
+            </button>
+          </div>
 
           {/* 魔法生成组件 */}
           <ChatMagicGenerator
@@ -949,7 +1086,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         sessionId={sessionId || ''}
         messages={messages}
       />
-      
+
       {/* 删除消息确认对话框 */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
@@ -960,8 +1097,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => {setShowDeleteDialog(false); console.log('删除操作已取消');}}>取消</Button>
-            <Button variant="destructive" onClick={() => {console.log('确认删除按钮被点击'); handleDeleteMessages();}}>
+            <Button onClick={() => { setShowDeleteDialog(false); console.log('删除操作已取消'); }}>取消</Button>
+            <Button variant="destructive" onClick={() => { console.log('确认删除按钮被点击'); handleDeleteMessages(); }}>
               确认删除
             </Button>
           </DialogFooter>

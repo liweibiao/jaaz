@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Request
 #from routers.agent import chat
-from services.chat_service import handle_chat
 from services.db_service import db_service
 import asyncio
 import json
 import traceback
+from fastapi import APIRouter, Request
+import uuid
 
 router = APIRouter(prefix="/api/canvas")
 
@@ -58,6 +59,8 @@ async def create_canvas(request: Request):
         
         # 如果没有提供原始画布ID，则创建聊天会话
         if not original_canvas_id:
+            # 延迟导入以避免循环依赖
+            from services.chat_service import handle_chat
             asyncio.create_task(handle_chat(data))
         
         return {"id": id }

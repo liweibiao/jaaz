@@ -31,3 +31,4 @@ pymediainfo
 openai-agents
 socksio # For vpn from command line like export https_proxy=http://127.0.0.1:1080 http_proxy=http://127.0.0.1:1080 all_proxy=socks5://127.0.0.1:1080
 piexif # For EXIF metadata handling in JPEG files 
+pyjwt # For JWT token handling in authentication
